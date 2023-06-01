@@ -4,6 +4,7 @@
 	import { BlockLabel, Empty, IconButton } from "@gradio/atoms";
 	import { Download } from "@gradio/icons";
 	import { get_coordinates_of_clicked_image } from "./utils";
+	import { createLoadObserver } from "./utils";
 
 	import { Image } from "@gradio/icons";
 
@@ -25,6 +26,26 @@
 			dispatch("select", { index: coordinates, value: null });
 		}
 	};
+
+	const handle_load = (evt: Event) => {
+		console.log('handle_load!!!')
+		const element = evt.currentTarget as HTMLImageElement;
+		let img_width = element.naturalWidth;
+		let img_height = element.naturalHeight;
+		let container_height = element.getBoundingClientRect().height;
+
+		console.log("StaticImage.svelte handle_image_load img_width:", img_width);
+		console.log("StaticImage.svelte handle_image_load img_height:", img_height);	
+		console.log("StaticImage.svelte handle_image_load container_height:", container_height);
+
+		
+
+	};
+
+	const onload = createLoadObserver(() => {
+        console.log('loaded!!!')
+    })
+
 </script>
 
 <BlockLabel {show_label} Icon={Image} label={label || "Image"} />
@@ -41,7 +62,8 @@
 		</a>
 	</div>
 	<!-- svelte-ignore a11y-click-events-have-key-events -->
-	<img src={value} alt="" class:selectable on:click={handle_click} />
+	<img use:onload src={value} alt="" class:selectable on:click={handle_click} on:load|once={handle_load}/>
+
 {/if}
 
 <style>

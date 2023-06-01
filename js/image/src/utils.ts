@@ -24,3 +24,19 @@ export const get_coordinates_of_clicked_image = (
 	}
 	return [x, y];
 };
+
+export const createLoadObserver = (handler: () => void) => {
+	let waiting = 0;
+
+	const onload = (el: EventTarget & { addEventListener: (type: string, listener: () => void) => void }) => {
+		waiting++;
+		el.addEventListener('load', () => {
+			waiting--;
+			if (waiting === 0) {
+				handler();
+			}
+		});
+	};
+
+	return onload;
+};

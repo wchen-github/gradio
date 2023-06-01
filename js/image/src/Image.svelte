@@ -94,6 +94,7 @@
 		drag: boolean;
 		upload: FileData;
 		select: SelectData;
+		selection_move: SelectData;
 	}>();
 
 	$: dispatch("change", value as string);
@@ -107,6 +108,12 @@
 		img_width = element.naturalWidth;
 		img_height = element.naturalHeight;
 		container_height = element.getBoundingClientRect().height;
+
+		console.log("image.svelte handle_image_load source:", source);
+		console.log("image.svelte handle_image_load tool:", tool);		
+		console.log("image.svelte handle_image_load img_width:", img_width);
+		console.log("image.svelte handle_image_load img_height:", img_height);	
+		console.log("image.svelte handle_image_load container_height:", container_height);
 	}
 
 	async function handle_sketch_clear() {
@@ -168,11 +175,13 @@
 	}
 
 	onMount(async () => {
+		console.log("image.svelte source:", source);
+		console.log("image.svelte tool:", tool);		
 		if (tool === "color-sketch" && value && typeof value === "string") {
 			static_image = value;
 			await tick();
 			handle_image_load({ currentTarget: value_img });
-		}
+		} 
 	});
 
 	const handle_click = (evt: MouseEvent) => {
@@ -181,6 +190,48 @@
 			dispatch("select", { index: coordinates, value: null });
 		}
 	};
+
+	let startCoordinates;
+	let mousePressed;
+
+	const handle_move_start = (evt: MouseEvent) => {
+		mousePressed = true;
+		startCoordinates = get_coordinates_of_clicked_image(evt);
+		console.log('mousePressed');
+
+		const image = evt.currentTarget as HTMLImageElement;
+		console.log(image);
+		//const canvas = document.getElementById("select_image") as HTMLCanvasElement;
+		console.log(image.width, image.height);
+		console.log(image instanceof HTMLImageElement)
+		const ctx = image.getContext("2d");
+
+		ctx.fillStyle = "red";
+  	 	ctx.fillRect(startCoordinates[0], startCoordinates[1], 100, 100);
+	};
+
+	let mouseMoved;
+	const handle_move = (evt: MouseEvent) => {		
+		if (mousePressed) {
+			mouseMoved = true;
+			console.log('mouseMoved');
+		}
+	};
+
+	const handle_move_end = (evt: MouseEvent) => {
+		if (mousePressed && mouseMoved) {
+			mousePressed = false;
+			mouseMoved = false;
+			let endCoordinates = get_coordinates_of_clicked_image(evt);
+			let offsetX = endCoordinates[0] - startCoordinates[0];
+			let offsetY = endCoordinates[1] - startCoordinates[1];
+			let offset = [offsetX, offsetY];			
+//			dispatch("selection_move", { index: offset, value: null });
+			dispatch("select", { index: startCoordinates, value: offset });
+			console.log('mouseReleased');			
+		}
+	};
+
 </script>
 
 <BlockLabel
@@ -216,12 +267,18 @@
 				/>
 
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
+				<!-- on:click={handle_click} -->
+				<canvas
 				<img
 					src={value}
 					alt=""
 					class:scale-x-[-1]={source === "webcam" && mirror_webcam}
 					class:selectable
-					on:click={handle_click}
+					on:mousedown={handle_move_start}
+					on:mousemove={handle_move}
+					on:mouseup={handle_move_end}
+					id="select_image"
+				/>
 				/>
 			{:else if (tool === "sketch" || tool === "color-sketch") && (value !== null || static_image)}
 				{#key static_image}

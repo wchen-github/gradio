@@ -19,6 +19,8 @@
 	export let height = 200;
 	export let container_height = 200;
 	export let shape;
+	
+	console.log(mode);
 
 	$: {
 		if (shape && (width || height)) {
@@ -77,7 +79,7 @@
 		},
 		{
 			name: "drawing",
-			zIndex: 11
+			zIndex: 16
 		},
 		{
 			name: "temp",
@@ -108,7 +110,21 @@
 
 	function draw_cropped_image() {
 		if (!shape) {
-			ctx.temp.drawImage(value_img, 0, 0, width, height);
+
+			ctx.temp.drawImage(value_img, 0, 0, width, height); 
+			
+			var imageData = ctx.temp.getImageData (0, 0, canvas.temp.width, height); // get the image data
+			var pixels = imageData.data; // get the pixel array
+			console.log(`canvas width: ${canvas.temp.width}, canvas height: ${canvas.temp.height}`);
+			console.log(`img width: ${width}, height: ${height}`);
+			console.log(`img data leng: ${pixels.length}`);
+			for (var i = 0; i < pixels.length; i += 4) { 
+				if (pixels[i+3] != 255) {
+					pixels[i+3] = 255; 
+				}
+			}
+			ctx.temp.putImageData (imageData, 0, 0, 0, 0, canvas.temp.width, height); // put the modified image data back
+
 			return;
 		}
 
@@ -313,6 +329,9 @@
 	let handle_draw_move = (e) => {
 		e.preventDefault();
 		const { x, y } = get_pointer_pos(e);
+
+		clear_canvas()
+
 		handle_pointer_move(x, y);
 	};
 
@@ -326,6 +345,46 @@
 		if (mode === "mask") {
 			save_mask_line();
 		}
+	};
+
+	// Create the path
+	var cropRect = {
+	top: 0,
+	left: 0,
+	width: 0,
+	height: 0
+	};
+	let handle_drag_start = (e) => {
+		e.preventDefault();
+		is_pressing = true;
+		const { x, y } = get_pointer_pos(e);
+		cropRect.left = x;
+		cropRect.top = y;
+		cropRect.width = 50;
+		cropRect.height = 50;
+	};
+
+
+	let handle_drag_move = (e) => {
+		e.preventDefault();
+		if (!is_pressing) {
+			return;
+		}
+
+		const { x, y } = get_pointer_pos(e);
+		ctx.drawing.drawImage(value_img, cropRect.left, cropRect.top, cropRect.width, cropRect.height, x, y, cropRect.width, cropRect.height);
+		//ctx.drawing.drawImage(value_img, x, y);
+
+	};
+
+	let handle_drag_end = (e) => {
+		e.preventDefault();
+		if (!is_pressing) {
+			return;
+		}
+		is_pressing = false;
+		const { x, y } = get_pointer_pos(e);
+
 	};
 
 	let old_width = 0;
@@ -431,7 +490,7 @@
 			points.push(lazy.brush.toObject());
 		}
 		if (is_drawing) {
-			points.push(lazy.brush.toObject());
+			points.push(lazy.brush.toObject());			
 			draw_points({
 				points: points,
 				brush_color,
@@ -451,25 +510,38 @@
 
 	let draw_points = ({ points, brush_color, brush_radius }) => {
 		if (!points || points.length < 2) return;
+
+		console.log("draw_points length", points.length)
+
 		ctx.temp.lineJoin = "round";
 		ctx.temp.lineCap = "round";
 
 		ctx.temp.strokeStyle = brush_color;
 		ctx.temp.lineWidth = brush_radius;
 		if (!points || points.length < 2) return;
+
+		console.log("draw_points length", points.length)
 		let p1 = points[0];
 		let p2 = points[1];
 		ctx.temp.moveTo(p2.x, p2.y);
 		ctx.temp.beginPath();
+
 		for (var i = 1, len = points.length; i < len; i++) {
 			var midPoint = mid_point(p1, p2);
 			ctx.temp.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
 			p1 = points[i];
 			p2 = points[i + 1];
 		}
-
+		/*
 		ctx.temp.lineTo(p1.x, p1.y);
+
 		ctx.temp.stroke();
+		*/
+		//draw a rectangle instead
+		ctx.temp.strokeStyle = 'red';
+		ctx.temp.lineWidth = 5;
+		ctx.temp.strokeRect(p1.x, p1.y, 50, 50);
+		console.log('drawing rect at ', p1.x, p1.y);
 	};
 
 	let draw_fake_points = ({ points, brush_color, brush_radius }) => {
@@ -483,15 +555,23 @@
 		let p2 = points[1];
 		ctx.temp_fake.moveTo(p2.x, p2.y);
 		ctx.temp_fake.beginPath();
+
+		
 		for (var i = 1, len = points.length; i < len; i++) {
 			var midPoint = mid_point(p1, p2);
 			ctx.temp_fake.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
 			p1 = points[i];
 			p2 = points[i + 1];
 		}
-
+		/*
 		ctx.temp_fake.lineTo(p1.x, p1.y);
 		ctx.temp_fake.stroke();
+		*/
+		//draw a rectangle instead
+		ctx.temp_fake.strokeStyle = 'red';
+		ctx.temp_fake.lineWidth = 5;
+		ctx.temp_fake.strokeRect(p1.x, p1.y, 50, 50);
+		console.log('drawing rect at ', p1.x, p1.y);		
 	};
 
 	let save_mask_line = () => {
@@ -557,7 +637,7 @@
 		if (mouse_has_moved || values_changed) {
 			const pointer = lazy.getPointerCoordinates();
 			const brush = lazy.getBrushCoordinates();
-			draw_interface(ctx.interface, pointer, brush);
+//			draw_interface(ctx.interface, pointer, brush);
 			mouse_has_moved = false;
 			values_changed = false;
 		}
@@ -574,6 +654,7 @@
 		ctx.clearRect(0, 0, width, height);
 
 		// brush preview
+		/*
 		ctx.beginPath();
 		ctx.fillStyle = brush_color;
 		ctx.arc(brush.x, brush.y, brush_radius / 2, 0, Math.PI * 2, true);
@@ -584,6 +665,7 @@
 		ctx.fillStyle = catenary_color;
 		ctx.arc(brush.x, brush.y, brush_dot, 0, Math.PI * 2, true);
 		ctx.fill();
+		*/
 	};
 
 	export function get_image_data() {
@@ -611,9 +693,21 @@
 			class:lr={add_lr_border}
 			class:tb={!add_lr_border}
 			bind:this={canvas[name]}
-			on:mousedown={name === "interface" ? handle_draw_start : undefined}
-			on:mousemove={name === "interface" ? handle_draw_move : undefined}
-			on:mouseup={name === "interface" ? handle_draw_end : undefined}
+			on:mousedown={
+				name === "interface" ? handle_draw_start : 
+				name === "drawing" ? handle_drag_start : 
+				undefined
+			}
+			on:mousemove={
+				name === "interface" ? handle_draw_move : 
+				name === "drawing" ? handle_drag_move : 
+				undefined
+			}
+			on:mouseup={
+				name === "interface" ? handle_draw_end : 
+				name === "drawing" ? handle_drag_end : 
+				undefined
+			}
 			on:mouseout={name === "interface" ? handle_draw_end : undefined}
 			on:blur={name === "interface" ? handle_draw_end : undefined}
 			on:touchstart={name === "interface" ? handle_draw_start : undefined}
@@ -647,7 +741,7 @@
 	}
 
 	canvas:hover {
-		cursor: none;
+		cursor: crosshair;
 	}
 
 	.wrap {

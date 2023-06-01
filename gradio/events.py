@@ -300,6 +300,19 @@ class Selectable(EventListener):
         See EventData documentation on how to use this event data.
         """
 
+@document("*selection_move", inherit=True)
+class SelectionMovable(EventListener):
+    def __init__(self):
+        self.selection_movable: bool = False
+        self.selection_move = EventListenerMethod(
+            self, "selection_move", callback=lambda: setattr(self, "selection_movable", True)
+        )
+        """
+        This listener is triggered when the user moves selection from within the Component.
+        This event has EventData of type gradio.SelectData that carries information, accessible through SelectData.index and SelectData.value.
+        See EventData documentation on how to use this event data.
+        """
+
 
 class SelectData(EventData):
     def __init__(self, target: Block | None, data: Any):

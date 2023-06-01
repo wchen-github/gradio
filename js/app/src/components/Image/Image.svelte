@@ -58,7 +58,34 @@
 >
 	<StatusTracker {...loading_status} />
 	{#if mode === "static"}
-		<StaticImage on:select {value} {label} {show_label} {selectable} />
+		<!-- <StaticImage on:select {value} {label} {show_label} {selectable} /> -->
+		<Image
+		{brush_radius}
+		{shape}
+		bind:value
+		{source}
+		{tool}
+		{selectable}
+		on:edit
+		on:clear
+		on:change
+		on:stream
+		on:drag={({ detail }) => (dragging = detail)}
+		on:upload
+		on:select
+		on:error={({ detail }) => {
+			loading_status = loading_status || {};
+			loading_status.status = "error";
+			loading_status.message = detail;
+		}}
+		{label}
+		{show_label}
+		{pending}
+		{streaming}
+		{mirror_webcam}
+	>
+		<UploadText type="image" />	
+	</Image>
 	{:else}
 		<Image
 			{brush_radius}

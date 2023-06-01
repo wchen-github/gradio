@@ -66,6 +66,7 @@ from gradio.events import (
     Playable,
     Releaseable,
     Selectable,
+    SelectionMovable,
     Streamable,
     Submittable,
     Uploadable,
@@ -1647,6 +1648,7 @@ class Image(
     Changeable,
     Streamable,
     Selectable,
+    SelectionMovable,
     Uploadable,
     IOComponent,
     ImgSerializable,
@@ -1728,6 +1730,7 @@ class Image(
         if streaming and source != "webcam":
             raise ValueError("Image streaming only available if source is 'webcam'.")
         self.select: EventListenerMethod
+        self.selection_move: EventListenerMethod
         """
         Event listener for when the user clicks on a pixel within the image.
         Uses event data gradio.SelectData to carry `index` to refer to the [x, y] coordinates of the clicked pixel.
@@ -1771,6 +1774,7 @@ class Image(
         visible: bool | None = None,
         brush_radius: float | None = None,
     ):
+        print("components.py: update() called", value, label, show_label, interactive, visible, brush_radius)
         return {
             "label": label,
             "show_label": show_label,
