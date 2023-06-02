@@ -19,6 +19,11 @@ export const get_coordinates_of_clicked_image = (
 		var x = Math.round((evt.clientX - imageRect.left - x_offset) * yScale);
 		var y = Math.round((evt.clientY - imageRect.top) * yScale);
 	}
+	const type = typeof evt.currentTarget
+	console.log(type);
+	console.log(image.naturalWidth, image.naturalHeight);
+	console.log(evt.clientX, evt.clientY, xScale, yScale, x, y);
+	console.log(imageRect) 
 	if (x < 0 || x >= image.naturalWidth || y < 0 || y >= image.naturalHeight) {
 		return null;
 	}
