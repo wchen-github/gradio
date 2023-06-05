@@ -110,8 +110,9 @@
 	let canvas_container = null;
 	let canvas_observer = null;
 	let line_count = 0;
-	let imageDataOriginal = null;
-
+	let value_img_data_original = null;
+	let value_img_opaque = null;
+	
 	function imagedata_to_image (imagedata) {
 		var canvas = document.createElement ('canvas');
 		var ctx = canvas.getContext ('2d');
@@ -136,48 +137,29 @@
 	function draw_cropped_image() {
 		if (!shape) {
 			
-			ctx.temp.drawImage(value_img, 0, 0, width, height); 
-
+			//ctx.temp.drawImage(value_img, 0, 0, width, height); 
 	
-			//?? Is it true that getImageData operates in the display buffer coordinates
-			console.log('no shape')
 			const x = canvas.temp.getBoundingClientRect();
 			console.log(`canvas width: ${ctx.temp.canvas.width}, canvas height: ${ctx.temp.canvas.height}`);
 			console.log(`img width: ${width}, height: ${height}`);
 
-			ctx.temp.fillStyle = "green";
-            ctx.temp.fillRect(0, 0, width-20, height-20); //drawing operate in the back buffer coordinates
+			//cover the image with a green rectangle less 20 pixels to test the image data
+			//ctx.temp.fillStyle = "green";
+            //ctx.temp.fillRect(0, 0, width-20, height-20); //drawing operate in the back buffer coordinates
 			
-			if (imageDataOriginal == null) {
-				imageDataOriginal = image_to_imagedata(value_img);
-			}
-
-			var imageData = ctx.temp.getImageData (0, 0, 20, 20); // get the image data
-			var pixels = imageData.data; // get the pixel array
-			console.log(`img data leng: ${pixels.length}`);
-			for (var i = 0; i < pixels.length; i += 4) { 
-				pixels[i] = 255 - pixels[i]; // orange
-				if (pixels[i+3] != 255) {
-					pixels[i+3] = 255; 
+			if (value_img_data_original == null) {
+				value_img_data_original = image_to_imagedata(value_img);
+				let value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
+				value_img_data_opaque.data.set(value_img_data_original.data);
+				var pixels = value_img_data_opaque.data; // get the pixel array
+				for (var i = 0; i < pixels.length; i += 4) { 
+					if (pixels[i+3] != 255) {
+						pixels[i+3] = 255; 
+					}
 				}
+				value_img_opaque = imagedata_to_image(value_img_data_opaque);
 			}
-			
-			//ctx.temp.putImageData (imageData, 0, 0, 0, 0, canvas.temp.width, height); // put the modified image data back
-
-			//ctx.temp.putImageData (imageData, 40, 40)
-			var testImage = imagedata_to_image(imageData);
-			ctx.temp.drawImage(testImage, 20, 20);
-			
-			ctx.temp.fillStyle = "red";
-            ctx.temp.fillRect(40, 40, 20, 20); 
-
-			//var origImage = imagedata_to_image(imageDataOriginal);
-			//ctx.temp.drawImage(origImage, 0, 0, width, height)
-			//ctx.temp.putImageData (imageDataOriginal, 0, 0)
-
-			//getImage data and putImageData all operate in the cavas width and height domain, they don't handle the scaling
-			//need to write more here to document what I learned
-			//get needs to be the whole canvas
+			ctx.temp.drawImage(value_img_opaque, 0, 0, width, height)
 
 			return;
 		}
@@ -418,9 +400,9 @@
 		cropRect.left = x;
 		cropRect.top = y;
 
-		const index = (Math.round(y) * imageDataOriginal.width + Math.round(x)) * 4;
-		const pixels = imageDataOriginal.data; 
-		console.log(`imageDataOriginal width and height: ${imageDataOriginal.width}, ${imageDataOriginal.height}`)
+		const index = (Math.round(y) * value_img_data_original.width + Math.round(x)) * 4;
+		const pixels = value_img_data_original.data; 
+		console.log(`imageDataOriginal width and height: ${value_img_data_original.width}, ${value_img_data_original.height}`)
 		console.log(`pixels length: ${pixels.length}`)
 		console.log(`image space x and y: ${x}, ${y}`); 
 		console.log(`pixel index: ${index}`);
@@ -433,13 +415,12 @@
 			return;
 		}
 
-		//ctx.drawing.clearRect(0, 0, width, height);
-		//draw_cropped_image();
+		clear_canvas();
+		ctx.drawing.clearRect(0, 0, width, height);
+		draw_cropped_image();
 	
 		const { x, y } = get_pointer_pos(e);
-		ctx.drawing.drawImage(value_img, cropRect.left, cropRect.top, cropRect.width, cropRect.height, x, y, cropRect.width, cropRect.height);
-		//ctx.drawing.drawImage(value_img, x, y);
-
+		ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, x, y, cropRect.width, cropRect.height);
 	};
 
 	let handle_drag_end = (e) => {
