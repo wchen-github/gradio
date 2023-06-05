@@ -386,19 +386,51 @@
 	};
 
 	// Create the path
+	var drag_start_x = null;
+	var drag_start_y = null;
 	var cropRect = {
 	top: 0,
 	left: 0,
 	width: 30,
 	height: 30
 	};
+	var selected_obj_id = null;
+	let find_bounding_box = (selected_obj_id, value_img_data_original) => {
+		let min_x = value_img_data_original.width;
+		let min_y = value_img_data_original.height;
+		let max_x = 0;
+		let max_y = 0;
+
+		for (let y = 0; y < value_img_data_original.height; y++) {
+			for (let x = 0; x < value_img_data_original.width; x++) {
+				const index = (y * value_img_data_original.width + x) * 4;
+				const pixels = value_img_data_original.data;
+				const pixel_value = pixels[index + 3];
+
+				if (pixel_value === selected_obj_id) {
+					min_x = Math.min(min_x, x);
+					min_y = Math.min(min_y, y);
+					max_x = Math.max(max_x, x);
+					max_y = Math.max(max_y, y);
+				}
+			}
+		}
+
+		return {
+			top: min_y,
+			left: min_x,
+			width: max_x - min_x,
+			height: max_y - min_y,
+		};
+	};
+
 	let handle_drag_start = (e) => {
 		e.preventDefault();
 		is_pressing = true;
 		const { x, y } = get_pointer_pos(e);
 
-		cropRect.left = x;
-		cropRect.top = y;
+		drag_start_x = x;
+		drag_start_y = y;
 
 		const index = (Math.round(y) * value_img_data_original.width + Math.round(x)) * 4;
 		const pixels = value_img_data_original.data; 
@@ -407,6 +439,8 @@
 		console.log(`image space x and y: ${x}, ${y}`); 
 		console.log(`pixel index: ${index}`);
 		console.log(`pixel value: ${pixels[index]}, ${pixels[index+1]}, ${pixels[index+2]}, ${pixels[index+3]}`);
+		selected_obj_id = pixels[index+3];
+		cropRect = find_bounding_box(selected_obj_id, value_img_data_original);
 	};
 
 	let handle_drag_move = (e) => {
@@ -420,7 +454,11 @@
 		draw_cropped_image();
 	
 		const { x, y } = get_pointer_pos(e);
-		ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, x, y, cropRect.width, cropRect.height);
+		const drag_move_x = x - drag_start_x;
+		const drag_move_y = y - drag_start_y;
+		const draw_x = cropRect.left + drag_move_x;
+		const draw_y = cropRect.top + drag_move_y;
+		ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, draw_x, draw_y, cropRect.width, cropRect.height);
 	};
 
 	let handle_drag_end = (e) => {

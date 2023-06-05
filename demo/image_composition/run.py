@@ -49,11 +49,17 @@ with gr.Blocks() as demo:
     def get_segment (input_data):
         img_orig = input_data['image']
         img_segmented = np.zeros((img_orig.shape[0], img_orig.shape[1], 4), dtype=np.uint8)
-        img_segmented[:, :, 0] = img_orig[:, :, 0] 
-        img_segmented[:, :, 1] = img_orig[:, :, 1] 
-        img_segmented[:, :, 2] = img_orig[:, :, 2] 
-        img_segmented[:, :, 3] = 255
-        img_segmented[0:100, :, 3] = 32
+
+        # Divide the image into 9 even squares
+        square_size = img_orig.shape[0] // 3
+        for i in range(3):
+            for j in range(3):
+                square = img_segmented[i*square_size:(i+1)*square_size, j*square_size:(j+1)*square_size]
+                square[:, :, 0] = i*85
+                square[:, :, 1] = j*85
+                square[:, :, 2] = (i+j)*30
+                square[:, :, 3] = (i*3+j+1)
+
         return img_segmented
 
     input_img.select(move_selection, [input_img, tolerance], input_img)
