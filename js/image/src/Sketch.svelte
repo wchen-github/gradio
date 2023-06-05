@@ -111,6 +111,7 @@
 	let canvas_observer = null;
 	let line_count = 0;
 	let value_img_data_original = null;
+	let value_img_data_opaque = null;
 	let value_img_opaque = null;
 	
 	function imagedata_to_image (imagedata) {
@@ -149,7 +150,7 @@
 			
 			if (value_img_data_original == null) {
 				value_img_data_original = image_to_imagedata(value_img);
-				let value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
+				value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
 				value_img_data_opaque.data.set(value_img_data_original.data);
 				var pixels = value_img_data_opaque.data; // get the pixel array
 				for (var i = 0; i < pixels.length; i += 4) { 
@@ -160,7 +161,13 @@
 				value_img_opaque = imagedata_to_image(value_img_data_opaque);
 			}
 			ctx.temp.drawImage(value_img_opaque, 0, 0, width, height)
-
+			if (changed_objects.length > 0) {
+				for (let i = 0; i < changed_objects.length; i++) {
+					const { img, pos } = changed_objects[i];
+					//console.log(pos, img);
+					ctx.temp.drawImage(img, pos.draw_x, pos.draw_y);
+				}
+			}
 			return;
 		}
 
@@ -391,11 +398,11 @@
 	var cropRect = {
 	top: 0,
 	left: 0,
-	width: 30,
-	height: 30
+	width: 0,
+	height: 0
 	};
-	var selected_obj_id = null;
-	let find_bounding_box = (selected_obj_id, value_img_data_original) => {
+
+	let find_bounding_box = (selected_obj_id) => {
 		let min_x = value_img_data_original.width;
 		let min_y = value_img_data_original.height;
 		let max_x = 0;
@@ -424,6 +431,21 @@
 		};
 	};
 
+	var changed_objects = [];
+	var cropped_image;
+	var current_object_id = 0;
+
+	function create_cropped_image(src_img, rect) {
+		const canvas = document.createElement('canvas');
+		canvas.width = rect.width;
+		canvas.height = rect.height;
+		const ctx = canvas.getContext('2d');
+		ctx.drawImage(src_img, cropRect.left, rect.top, rect.width, rect.height, 0, 0, rect.width, rect.height);
+		var dst_img = new Image();
+		dst_img.src = canvas.toDataURL();
+		return dst_img;
+	}
+
 	let handle_drag_start = (e) => {
 		e.preventDefault();
 		is_pressing = true;
@@ -439,8 +461,10 @@
 		console.log(`image space x and y: ${x}, ${y}`); 
 		console.log(`pixel index: ${index}`);
 		console.log(`pixel value: ${pixels[index]}, ${pixels[index+1]}, ${pixels[index+2]}, ${pixels[index+3]}`);
-		selected_obj_id = pixels[index+3];
-		cropRect = find_bounding_box(selected_obj_id, value_img_data_original);
+		current_object_id = pixels[index+3];
+		cropRect = find_bounding_box(current_object_id);
+		cropped_image = create_cropped_image(value_img_opaque, cropRect);
+		
 	};
 
 	let handle_drag_move = (e) => {
@@ -458,7 +482,31 @@
 		const drag_move_y = y - drag_start_y;
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;
-		ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, draw_x, draw_y, cropRect.width, cropRect.height);
+		//ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, draw_x, draw_y, cropRect.width, cropRect.height);
+		ctx.drawing.drawImage(cropped_image, draw_x, draw_y);
+	};
+
+	let erase_object = (obj_id) => {
+		let min_x = value_img_data_opaque.width;
+		let min_y = value_img_data_opaque.height;
+		let max_x = 0;
+		let max_y = 0;
+
+		for (let y = 0; y < value_img_data_opaque.height; y++) {
+			for (let x = 0; x < value_img_data_opaque.width; x++) {
+				const index = (y * value_img_data_opaque.width + x) * 4;
+				const pixels_original = value_img_data_original.data;
+				var pixels = value_img_data_opaque.data;
+
+				if (pixels_original[index + 3] == obj_id) {
+					pixels[index] = 0;
+					pixels[index + 1] = 0;
+					pixels[index + 2] = 0;										
+					pixels[index + 3] = 0;
+				}
+			}
+		}
+		value_img_opaque = imagedata_to_image (value_img_data_opaque);
 	};
 
 	let handle_drag_end = (e) => {
@@ -468,7 +516,15 @@
 		}
 		is_pressing = false;
 		const { x, y } = get_pointer_pos(e);
-
+		const drag_move_x = x - drag_start_x;
+		const drag_move_y = y - drag_start_y;
+		const draw_x = cropRect.left + drag_move_x;
+		const draw_y = cropRect.top + drag_move_y;		
+		changed_objects.push({id: current_object_id, pos: {draw_x, draw_y}, img: cropped_image});
+		erase_object(current_object_id);
+	//	clear_canvas();
+	//	ctx.drawing.clearRect(0, 0, width, height);
+	//	draw_cropped_image();
 	};
 
 	let old_width = 0;
