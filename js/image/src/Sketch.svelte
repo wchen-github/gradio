@@ -141,12 +141,8 @@
 			//ctx.temp.drawImage(value_img, 0, 0, width, height); 
 	
 			const x = canvas.temp.getBoundingClientRect();
-			console.log(`canvas width: ${ctx.temp.canvas.width}, canvas height: ${ctx.temp.canvas.height}`);
-			console.log(`img width: ${width}, height: ${height}`);
-
-			//cover the image with a green rectangle less 20 pixels to test the image data
-			//ctx.temp.fillStyle = "green";
-            //ctx.temp.fillRect(0, 0, width-20, height-20); //drawing operate in the back buffer coordinates
+			//console.log(`canvas width: ${ctx.temp.canvas.width}, canvas height: ${ctx.temp.canvas.height}`);
+			//console.log(`img width: ${width}, height: ${height}`);
 			
 			if (value_img_data_original == null) {
 				value_img_data_original = image_to_imagedata(value_img);
@@ -464,7 +460,8 @@
 		current_object_id = pixels[index+3];
 		cropRect = find_bounding_box(current_object_id);
 		cropped_image = create_cropped_image(value_img_opaque, cropRect);
-		
+
+//		mouse_has_moved = true;
 	};
 
 	let handle_drag_move = (e) => {
@@ -484,6 +481,7 @@
 		const draw_y = cropRect.top + drag_move_y;
 		//ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, draw_x, draw_y, cropRect.width, cropRect.height);
 		ctx.drawing.drawImage(cropped_image, draw_x, draw_y);
+//		mouse_has_moved = true;
 	};
 
 	let erase_object = (obj_id) => {
@@ -491,13 +489,12 @@
 		let min_y = value_img_data_opaque.height;
 		let max_x = 0;
 		let max_y = 0;
-
+		
 		for (let y = 0; y < value_img_data_opaque.height; y++) {
 			for (let x = 0; x < value_img_data_opaque.width; x++) {
 				const index = (y * value_img_data_opaque.width + x) * 4;
 				const pixels_original = value_img_data_original.data;
 				var pixels = value_img_data_opaque.data;
-
 				if (pixels_original[index + 3] == obj_id) {
 					pixels[index] = 0;
 					pixels[index + 1] = 0;
@@ -506,7 +503,12 @@
 				}
 			}
 		}
+		
 		value_img_opaque = imagedata_to_image (value_img_data_opaque);
+		value_img_opaque.addEventListener('load', () => {
+			console.log('erase_object: value_img_opaque loaded');
+			draw_cropped_image();
+		});
 	};
 
 	let handle_drag_end = (e) => {
@@ -515,16 +517,15 @@
 			return;
 		}
 		is_pressing = false;
+		mouse_has_moved = true;
 		const { x, y } = get_pointer_pos(e);
 		const drag_move_x = x - drag_start_x;
 		const drag_move_y = y - drag_start_y;
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;		
 		changed_objects.push({id: current_object_id, pos: {draw_x, draw_y}, img: cropped_image});
+		clear_canvas();
 		erase_object(current_object_id);
-	//	clear_canvas();
-	//	ctx.drawing.clearRect(0, 0, width, height);
-	//	draw_cropped_image();
 	};
 
 	let old_width = 0;
