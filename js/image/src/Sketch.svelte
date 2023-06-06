@@ -161,7 +161,7 @@
 				for (let i = 0; i < changed_objects.length; i++) {
 					const { img, pos } = changed_objects[i];
 					//console.log(pos, img);
-					ctx.temp.drawImage(img, pos.draw_x, pos.draw_y);
+					ctx.temp.drawImage(img, pos.left, pos.top);
 				}
 			}
 			return;
@@ -442,6 +442,48 @@
 		return dst_img;
 	}
 
+	function construct_current_object(current_object_id)
+	{
+		let ids = changed_objects.map(obj => obj.id);
+		console.log("changed obj ids =", ids);
+		if (ids.includes(current_object_id)) {
+		  	console.log("current_object_id is a chaged object");
+			let current_obj = changed_objects.find(obj => obj.id === current_object_id);
+			console.log("current_obj =", current_obj);			
+			cropRect = current_obj.pos;
+			cropped_image = current_obj.img;
+			//console.log("cropped_image =", cropped_image);
+			//console.log("cropRect =", cropRect);
+		}
+		else {
+			cropRect = find_bounding_box(current_object_id);
+			cropped_image = create_cropped_image(value_img_opaque, cropRect);
+		}
+	}
+
+	function identify_object_id(x, y) {
+		const index = (Math.round(y) * value_img_data_original.width + Math.round(x)) * 4;
+		const pixels = value_img_data_original.data; 
+		console.log(`imageDataOriginal width and height: ${value_img_data_original.width}, ${value_img_data_original.height}`)
+		console.log(`pixels length: ${pixels.length}`)
+		console.log(`image space x and y: ${x}, ${y}`); 
+		console.log(`pixel index: ${index}`);
+		console.log(`pixel value: ${pixels[index]}, ${pixels[index+1]}, ${pixels[index+2]}, ${pixels[index+3]}`);
+		var id_selected = pixels[index+3];
+		if (changed_objects.length > 0) {
+			for (let i = changed_objects.length - 1; i >= 0 ; i--) {
+				const { id, pos } = changed_objects[i];
+				console.log(id, pos);
+				if (x >= pos.left && x < pos.left + pos.width && y >= pos.top && y < pos.top + pos.height)
+				{
+					id_selected = id;
+					break;
+				}
+			}
+		}
+		return id_selected;
+	}
+
 	let handle_drag_start = (e) => {
 		e.preventDefault();
 		is_pressing = true;
@@ -450,18 +492,14 @@
 		drag_start_x = x;
 		drag_start_y = y;
 
-		const index = (Math.round(y) * value_img_data_original.width + Math.round(x)) * 4;
-		const pixels = value_img_data_original.data; 
-		console.log(`imageDataOriginal width and height: ${value_img_data_original.width}, ${value_img_data_original.height}`)
-		console.log(`pixels length: ${pixels.length}`)
-		console.log(`image space x and y: ${x}, ${y}`); 
-		console.log(`pixel index: ${index}`);
-		console.log(`pixel value: ${pixels[index]}, ${pixels[index+1]}, ${pixels[index+2]}, ${pixels[index+3]}`);
-		current_object_id = pixels[index+3];
-		cropRect = find_bounding_box(current_object_id);
-		cropped_image = create_cropped_image(value_img_opaque, cropRect);
-
-//		mouse_has_moved = true;
+		current_object_id = identify_object_id(x, y);
+		if (current_object_id == 0) {
+			console.log("no object is selected");
+			is_pressing = false
+			return;
+		}
+		console.log("handle_drag_start: changed_objects", changed_objects)
+		construct_current_object(current_object_id);
 	};
 
 	let handle_drag_move = (e) => {
@@ -479,9 +517,7 @@
 		const drag_move_y = y - drag_start_y;
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;
-		//ctx.drawing.drawImage(value_img_opaque, cropRect.left, cropRect.top, cropRect.width, cropRect.height, draw_x, draw_y, cropRect.width, cropRect.height);
 		ctx.drawing.drawImage(cropped_image, draw_x, draw_y);
-//		mouse_has_moved = true;
 	};
 
 	let erase_object = (obj_id) => {
@@ -489,7 +525,19 @@
 		let min_y = value_img_data_opaque.height;
 		let max_x = 0;
 		let max_y = 0;
-		
+
+		let ids = changed_objects.map(obj => obj.id);
+		console.log("erase_object: changed obj ids =", ids);
+		if (ids.includes(current_object_id)) {
+			let index = changed_objects.findLastIndex(obj => obj.id === obj_id);
+			for (let i = index - 1; i >= 0; i--) {
+				if (changed_objects[i].id === obj_id) {
+					changed_objects.splice(i, 1);
+				} 
+			}
+		}
+
+		//improve: not be necessary for objects that have been erased before
 		for (let y = 0; y < value_img_data_opaque.height; y++) {
 			for (let x = 0; x < value_img_data_opaque.width; x++) {
 				const index = (y * value_img_data_opaque.width + x) * 4;
@@ -503,12 +551,14 @@
 				}
 			}
 		}
-		
 		value_img_opaque = imagedata_to_image (value_img_data_opaque);
 		value_img_opaque.addEventListener('load', () => {
+			clear_canvas();
 			console.log('erase_object: value_img_opaque loaded');
 			draw_cropped_image();
 		});
+
+		return;
 	};
 
 	let handle_drag_end = (e) => {
@@ -523,8 +573,7 @@
 		const drag_move_y = y - drag_start_y;
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;		
-		changed_objects.push({id: current_object_id, pos: {draw_x, draw_y}, img: cropped_image});
-		clear_canvas();
+		changed_objects.push({id: current_object_id, pos: {left: draw_x, top: draw_y, width: cropRect.width, height: cropRect.height}, img: cropped_image});
 		erase_object(current_object_id);
 	};
 
