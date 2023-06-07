@@ -499,7 +499,7 @@
 			return;
 		}
 		console.log("handle_drag_start: changed_objects", changed_objects)
-		construct_current_object(current_object_id);
+		construct_current_object(current_object_id);		
 	};
 
 	let handle_drag_move = (e) => {
@@ -569,12 +569,15 @@
 		is_pressing = false;
 		mouse_has_moved = true;
 		const { x, y } = get_pointer_pos(e);
-		const drag_move_x = x - drag_start_x;
-		const drag_move_y = y - drag_start_y;
+		const drag_move_x = Math.round(x - drag_start_x);
+		const drag_move_y = Math.round(y - drag_start_y);
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;		
 		changed_objects.push({id: current_object_id, pos: {left: draw_x, top: draw_y, width: cropRect.width, height: cropRect.height}, img: cropped_image});
 		erase_object(current_object_id);
+
+		dispatch("select", { index: [drag_move_x, drag_move_y], value: current_object_id });
+		console.log("handle_drag_end: dispatch (select)")
 	};
 
 	let old_width = 0;
@@ -792,6 +795,7 @@
 
 	let trigger_on_change = () => {
 		const x = get_image_data();
+		console.log("trigger_on_change");
 		dispatch("change", x);
 	};
 

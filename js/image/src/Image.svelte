@@ -84,6 +84,13 @@
 		await tick();
 
 		dispatch(streaming ? "stream" : "edit");
+		console.log("image.svelte handle_save source =", source, "value:", value);
+	}
+
+	async function handle_select({ detail }: { detail: SelectData }) {
+		await tick();
+		dispatch("select", detail);
+		console.log("image.svelte handle_select source =", source, "detail:", detail);
 	}
 
 	const dispatch = createEventDispatcher<{
@@ -298,6 +305,7 @@
 						bind:brush_radius
 						bind:brush_color
 						on:change={handle_save}
+						on:select={handle_select}
 						{mode}
 						width={img_width || max_width}
 						height={img_height || max_height}

@@ -9,9 +9,13 @@ with gr.Blocks() as demo:
         #input_img = gr.Image(label="Input", tool="editor")
         input_img = gr.Image(label="Input", tool="sketch")
         print("input image config", input_img.get_config())
-        output_img = gr.Image(label="Segmented image", tool="sketch")
-        print("output image config", output_img.get_config())
-    segment_btn = gr.Button("Segment image")
+#    with gr.Row():
+        segmented_img = gr.Image(label="Segmented", tool="sketch")
+        print("segment image config", segmented_img.get_config())
+        composed_img = gr.Image(label="Composed", tool="sketch")
+        print("composed image config", composed_img.get_config()) #strangely, these two need to be in the same Row, perhaps due to shared np array 
+    with gr.Row():
+        segment_btn = gr.Button("Segment image")
 
     def move_selection(img, d, evt: gr.SelectData):
         """Returns an image with the selected segment highlighted."""
@@ -46,7 +50,11 @@ with gr.Blocks() as demo:
         print(evt)
         return
 
+    base_layer = None
+    changed_objects = []
+
     def get_segment (input_data):
+        global base_layer
         img_orig = input_data['image']
         img_segmented = np.zeros((img_orig.shape[0], img_orig.shape[1], 4), dtype=np.uint8)
 
@@ -60,10 +68,52 @@ with gr.Blocks() as demo:
                 square[:, :, 2] = (i+j)*30
                 square[:, :, 3] = (i*3+j+1)
 
+        base_layer = img_segmented.copy()
         return img_segmented
 
     input_img.select(move_selection, [input_img, tolerance], input_img)
-    segment_btn.click(get_segment, input_img, output_img)
+
+    def changed_objects_handler(input_data, evt: gr.SelectData):
+        global base_layer
+        global changed_objects
+
+        pos_x, pos_y = evt.index
+        obj_id = evt.value
+        print(f"obj {obj_id} moved to {pos_x}, {pos_y}")
+
+        img = base_layer
+        for obj in changed_objects:
+            if obj['id'] == obj_id:
+                img = obj['img']
+                changed_objects.remove(obj)
+                break
+
+        new_img = np.zeros_like(base_layer)
+        for i in range(img.shape[0]):
+            for j in range(img.shape[1]):
+                if img[i, j, 3] == obj_id:
+                    new_i = i + pos_y
+                    new_j = j + pos_x
+                    if new_i >= 0 and new_i < img.shape[0] and new_j >= 0 and new_j < img.shape[1]:
+                        new_img[new_i, new_j] = img[i, j]                        
+                    base_layer[i, j] = 0
+
+        changed_objects.append({'id': obj_id, 'img': new_img})
+        composited_img = composite_all_layers(base_layer, changed_objects)
+        return composited_img
+    
+    def composite_all_layers(base_layer, changed_objects):
+        img = base_layer.copy()
+        for obj in changed_objects:
+            for i in range(obj['img'].shape[0]):
+                for j in range(obj['img'].shape[1]):
+                    if obj['img'][i, j, 3] != 0:
+                        img[i, j] = obj['img'][i, j]
+        return img
+    
+    segmented_img.select (changed_objects_handler, segmented_img, composed_img)
+    
+    segment_btn.click(get_segment, input_img, segmented_img)
 
 #    input_img.selection_move(get_selection_move_data, input_img, input_img)
 
