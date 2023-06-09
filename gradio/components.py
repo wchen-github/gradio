@@ -64,6 +64,7 @@ from gradio.events import (
     EventListenerMethod,
     Inputable,
     Playable,
+    Recordable,
     Releaseable,
     Selectable,
     SelectionMovable,
@@ -127,17 +128,13 @@ class Component(Block, Serializable):
         """
         return y
 
-    def style(
-        self,
-        *,
-        container: bool | None = None,
-        **kwargs,
-    ):
+    def style(self, *args, **kwargs):
         """
-        This method can be used to change the appearance of the component.
-        Parameters:
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the Components constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the Components constructor instead."
+        )
         put_deprecated_params_in_box = False
         if "rounded" in kwargs:
             warnings.warn(
@@ -158,8 +155,6 @@ class Component(Block, Serializable):
                 "'border' styling is no longer supported. To place adjacent components in a shared border, place them in a Column(variant='box')."
             )
             kwargs.pop("border")
-        if container is not None:
-            self._style["container"] = container
         if len(kwargs):
             for key in kwargs:
                 warnings.warn(f"Unknown style parameter: {key}")
@@ -184,6 +179,9 @@ class IOComponent(Component):
         label: str | None = None,
         info: str | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -204,6 +202,13 @@ class IOComponent(Component):
         self.label = label
         self.info = info
         self.show_label = show_label
+        self.container = container
+        if scale is not None and scale != round(scale):
+            warnings.warn(
+                f"'scale' value should be an integer. Using {scale} will cause issues."
+            )
+        self.scale = scale
+        self.min_width = min_width
         self.interactive = interactive
 
         # load_event is set in the Blocks.attach_load_events method
@@ -375,6 +380,9 @@ class IOComponent(Component):
         config = {
             "label": self.label,
             "show_label": self.show_label,
+            "container": self.container,
+            "scale": self.scale,
+            "min_width": self.min_width,
             "interactive": self.interactive,
             **super().get_config(),
         }
@@ -406,7 +414,6 @@ class FormComponent:
         return Form
 
 
-@document("style")
 class Textbox(
     FormComponent,
     Changeable,
@@ -439,11 +446,15 @@ class Textbox(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
         type: str = "text",
+        show_copy_button: bool = False,
         **kwargs,
     ):
         """
@@ -456,22 +467,26 @@ class Textbox(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will be rendered as an editable textbox; if False, editing will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
             type: The type of textbox. One of: 'text', 'password', 'email', Default is 'text'.
+            show_copy_button: If True, includes a copy button to copy the text in the textbox. Only applies if show_label is True.
         """
         if type not in ["text", "password", "email"]:
             raise ValueError('`type` must be one of "text", "password", or "email".')
 
-        #
         self.lines = lines
         if type == "text":
             self.max_lines = max(lines, max_lines)
         else:
             self.max_lines = 1
         self.placeholder = placeholder
+        self.show_copy_button = show_copy_button
         self.select: EventListenerMethod
         """
         Event listener for when the user selects text in the Textbox.
@@ -484,6 +499,9 @@ class Textbox(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -502,6 +520,7 @@ class Textbox(
             "placeholder": self.placeholder,
             "value": self.value,
             "type": self.type,
+            "show_copy_button": self.show_copy_button,
             **IOComponent.get_config(self),
         }
 
@@ -513,9 +532,13 @@ class Textbox(
         placeholder: str | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
         interactive: bool | None = None,
         type: str | None = None,
+        show_copy_button: bool | None = None,
     ):
         return {
             "lines": lines,
@@ -523,10 +546,14 @@ class Textbox(
             "placeholder": placeholder,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "type": type,
             "interactive": interactive,
+            "show_copy_button": show_copy_button,
             "__type__": "update",
         }
 
@@ -613,18 +640,18 @@ class Textbox(
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the Textbox component.
-        Parameters:
-            show_copy_button: If True, includes a copy button to copy the text in the textbox. Only applies if show_label is True.
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
         if show_copy_button is not None:
-            self._style["show_copy_button"] = show_copy_button
+            self.show_copy_button = show_copy_button
+        if container is not None:
+            self.container = container
+        return self
 
-        return Component.style(self, container=container, **kwargs)
 
-
-@document("style")
 class Number(
     FormComponent,
     Changeable,
@@ -652,6 +679,9 @@ class Number(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -666,6 +696,9 @@ class Number(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will be editable; if False, editing will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -679,6 +712,9 @@ class Number(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -719,12 +755,18 @@ class Number(
         value: float | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
         return {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "interactive": interactive,
@@ -805,7 +847,6 @@ class Number(
         return interpretation
 
 
-@document("style")
 class Slider(
     FormComponent,
     Changeable,
@@ -836,6 +877,9 @@ class Slider(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -853,6 +897,9 @@ class Slider(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, slider will be adjustable; if False, adjusting will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -875,6 +922,9 @@ class Slider(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -927,6 +977,9 @@ class Slider(
         step: float | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
@@ -936,6 +989,9 @@ class Slider(
             "step": step,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -973,18 +1029,16 @@ class Slider(
         container: bool | None = None,
     ):
         """
-        This method can be used to change the appearance of the slider.
-        Parameters:
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        Component.style(
-            self,
-            container=container,
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
         )
+        if container is not None:
+            self.container = container
         return self
 
 
-@document("style")
 class Checkbox(
     FormComponent,
     Changeable,
@@ -1011,6 +1065,9 @@ class Checkbox(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -1024,6 +1081,9 @@ class Checkbox(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, this checkbox can be checked; if False, checking will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -1041,6 +1101,9 @@ class Checkbox(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -1061,12 +1124,18 @@ class Checkbox(
         value: bool | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
         return {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -1087,7 +1156,6 @@ class Checkbox(
             return None, scores[0]
 
 
-@document("style")
 class CheckboxGroup(
     FormComponent,
     Changeable,
@@ -1115,6 +1183,9 @@ class CheckboxGroup(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -1130,6 +1201,9 @@ class CheckboxGroup(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, choices in this checkbox group will be checkable; if False, checking will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -1155,6 +1229,9 @@ class CheckboxGroup(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -1186,6 +1263,9 @@ class CheckboxGroup(
         choices: list[str] | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
@@ -1193,6 +1273,9 @@ class CheckboxGroup(
             "choices": choices,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -1259,19 +1342,18 @@ class CheckboxGroup(
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the CheckboxGroup.
-        Parameters:
-            item_container: If True, will place the items in a container.
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
         if item_container is not None:
-            self._style["item_container"] = item_container
-
-        Component.style(self, container=container, **kwargs)
+            warnings.warn("The `item_container` parameter is deprecated.")
+        if container is not None:
+            self.container = container
         return self
 
 
-@document("style")
 class Radio(
     FormComponent,
     Selectable,
@@ -1300,6 +1382,9 @@ class Radio(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -1315,6 +1400,9 @@ class Radio(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, choices in this radio group will be selectable; if False, selection will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -1339,6 +1427,9 @@ class Radio(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -1368,6 +1459,9 @@ class Radio(
         choices: list[str] | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
@@ -1375,6 +1469,9 @@ class Radio(
             "choices": choices,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -1423,19 +1520,18 @@ class Radio(
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the radio component.
-        Parameters:
-            item_container: If True, will place items in a container.
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
         if item_container is not None:
-            self._style["item_container"] = item_container
-
-        Component.style(self, container=container, **kwargs)
+            warnings.warn("The `item_container` parameter is deprecated.")
+        if container is not None:
+            self.container = container
         return self
 
 
-@document("style")
 class Dropdown(
     Changeable,
     Inputable,
@@ -1465,6 +1561,9 @@ class Dropdown(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -1483,6 +1582,9 @@ class Dropdown(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, choices in this dropdown will be selectable; if False, selection will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -1522,6 +1624,9 @@ class Dropdown(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -1571,6 +1676,9 @@ class Dropdown(
         choices: str | list[str] | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         placeholder: str | None = None,
         visible: bool | None = None,
@@ -1579,6 +1687,9 @@ class Dropdown(
             "choices": choices,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "interactive": interactive,
@@ -1633,15 +1744,16 @@ class Dropdown(
 
     def style(self, *, container: bool | None = None, **kwargs):
         """
-        This method can be used to change the appearance of the Dropdown.
-        Parameters:
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        Component.style(self, container=container, **kwargs)
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
+        if container is not None:
+            self.container = container
         return self
 
 
-@document("style")
 class Image(
     Editable,
     Clearable,
@@ -1668,6 +1780,8 @@ class Image(
         value: str | _Image.Image | np.ndarray | None = None,
         *,
         shape: tuple[int, int] | None = None,
+        height: int | None = None,
+        width: int | None = None,
         image_mode: str = "RGB",
         invert_colors: bool = False,
         source: str = "upload",
@@ -1676,6 +1790,9 @@ class Image(
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         streaming: bool = False,
@@ -1688,7 +1805,9 @@ class Image(
         """
         Parameters:
             value: A PIL Image, numpy array, path or URL for the default value that Image component is going to take. If callable, the function will be called whenever the app loads to set the initial value of the component.
-            shape: (width, height) shape to crop and resize image to; if None, matches input image size. Pass None for either width or height to only crop and resize the other.
+            shape: (width, height) shape to crop and resize image when passed to function. If None, matches input image size. Pass None for either width or height to only crop and resize the other.
+            height: Height of the displayed image in pixels.
+            width: Width of the displayed image in pixels.
             image_mode: "RGB" if color, or "L" if black and white.
             invert_colors: whether to invert the image as a preprocessing step.
             source: Source of image. "upload" creates a box where user can drop an image file, "webcam" allows user to take snapshot from their webcam, "canvas" defaults to a white image that can be edited and drawn upon with tools.
@@ -1697,6 +1816,9 @@ class Image(
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will allow users to upload and edit an image; if False, can only be used to display images. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             streaming: If True when used in a `live` interface, will automatically stream webcam feed. Only valid is source is 'webcam'.
@@ -1714,6 +1836,8 @@ class Image(
             )
         self.type = type
         self.shape = shape
+        self.height = height
+        self.width = width
         self.image_mode = image_mode
         valid_sources = ["upload", "webcam", "canvas"]
         if source not in valid_sources:
@@ -1742,6 +1866,9 @@ class Image(
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -1755,6 +1882,8 @@ class Image(
         return {
             "image_mode": self.image_mode,
             "shape": self.shape,
+            "height": self.height,
+            "width": self.width,
             "source": self.source,
             "tool": self.tool,
             "value": self.value,
@@ -1768,16 +1897,26 @@ class Image(
     @staticmethod
     def update(
         value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
+        height: int | None = None,
+        width: int | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
         brush_radius: float | None = None,
     ):
         print("components.py: update() called", value, label, show_label, interactive, visible, brush_radius)
         return {
+            "height": height,
+            "width": width,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -1971,17 +2110,15 @@ class Image(
 
     def style(self, *, height: int | None = None, width: int | None = None, **kwargs):
         """
-        This method can be used to change the appearance of the Image component.
-        Parameters:
-            height: Height of the image.
-            width: Width of the image.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        self._style["height"] = height
-        self._style["width"] = width
-        Component.style(
-            self,
-            **kwargs,
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
         )
+        if height is not None:
+            self.height = height
+        if width is not None:
+            self.width = width
         return self
 
     def check_streamable(self):
@@ -1998,11 +2135,11 @@ class Image(
         return str(utils.abspath(input_data))
 
 
-@document("style")
 class Video(
     Changeable,
     Clearable,
     Playable,
+    Recordable,
     Uploadable,
     IOComponent,
     VideoSerializable,
@@ -2025,15 +2162,21 @@ class Video(
         *,
         format: str | None = None,
         source: str = "upload",
+        height: int | None = None,
+        width: int | None = None,
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
         mirror_webcam: bool = True,
         include_audio: bool | None = None,
+        autoplay: bool = False,
         **kwargs,
     ):
         """
@@ -2041,9 +2184,14 @@ class Video(
             value: A path or URL for the default value that Video component is going to take. Can also be a tuple consisting of (video filepath, subtitle filepath). If a subtitle file is provided, it should be of type .srt or .vtt. Or can be callable, in which case the function will be called whenever the app loads to set the initial value of the component.
             format: Format of video format to be returned by component, such as 'avi' or 'mp4'. Use 'mp4' to ensure browser playability. If set to None, video will keep uploaded format.
             source: Source of video. "upload" creates a box where user can drop an video file, "webcam" allows user to record a video from their webcam.
+            height: Height of the displayed video in pixels.
+            width: Width of the displayed video in pixels.
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will allow users to upload a video; if False, can only be used to display videos. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -2052,12 +2200,15 @@ class Video(
             include_audio: Whether the component should record/retain the audio track for a video. By default, audio is excluded for webcam videos and included for uploaded videos.
         """
         self.format = format
+        self.autoplay = autoplay
         valid_sources = ["upload", "webcam"]
         if source not in valid_sources:
             raise ValueError(
                 f"Invalid value for parameter `source`: {source}. Please choose from one of: {valid_sources}"
             )
         self.source = source
+        self.height = height
+        self.width = width
         self.mirror_webcam = mirror_webcam
         self.include_audio = (
             include_audio if include_audio is not None else source == "upload"
@@ -2067,6 +2218,9 @@ class Video(
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -2079,8 +2233,11 @@ class Video(
         return {
             "source": self.source,
             "value": self.value,
+            "height": self.height,
+            "width": self.width,
             "mirror_webcam": self.mirror_webcam,
             "include_audio": self.include_audio,
+            "autoplay": self.autoplay,
             **IOComponent.get_config(self),
         }
 
@@ -2091,18 +2248,30 @@ class Video(
         | Literal[_Keywords.NO_VALUE]
         | None = _Keywords.NO_VALUE,
         source: str | None = None,
+        height: int | None = None,
+        width: int | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
+        autoplay: bool | None = None,
     ):
         return {
             "source": source,
+            "height": height,
+            "width": width,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
+            "autoplay": autoplay,
             "__type__": "update",
         }
 
@@ -2308,25 +2477,23 @@ class Video(
 
     def style(self, *, height: int | None = None, width: int | None = None, **kwargs):
         """
-        This method can be used to change the appearance of the video component.
-        Parameters:
-            height: Height of the video.
-            width: Width of the video.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        self._style["height"] = height
-        self._style["width"] = width
-        Component.style(
-            self,
-            **kwargs,
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
         )
+        if height is not None:
+            self.height = height
+        if width is not None:
+            self.width = width
         return self
 
 
-@document("style")
 class Audio(
     Changeable,
     Clearable,
     Playable,
+    Recordable,
     Streamable,
     Uploadable,
     IOComponent,
@@ -2351,12 +2518,16 @@ class Audio(
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         streaming: bool = False,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
         format: Literal["wav", "mp3"] = "wav",
+        autoplay: bool = False,
         **kwargs,
     ):
         """
@@ -2367,6 +2538,9 @@ class Audio(
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will allow users to upload and edit a audio file; if False, can only be used to play audio. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             streaming: If set to True when used in a `live` interface, will automatically stream webcam feed. Only valid is source is 'microphone'.
@@ -2396,6 +2570,9 @@ class Audio(
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -2405,12 +2582,14 @@ class Audio(
         )
         TokenInterpretable.__init__(self)
         self.format = format
+        self.autoplay = autoplay
 
     def get_config(self):
         return {
             "source": self.source,
             "value": self.value,
             "streaming": self.streaming,
+            "autoplay": self.autoplay,
             **IOComponent.get_config(self),
         }
 
@@ -2426,16 +2605,24 @@ class Audio(
         source: str | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
+        autoplay: bool | None = None,
     ):
         return {
             "source": source,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
+            "autoplay": autoplay,
             "__type__": "update",
         }
 
@@ -2601,24 +2788,10 @@ class Audio(
                 "Audio streaming only available if source is 'microphone'."
             )
 
-    def style(
-        self,
-        **kwargs,
-    ):
-        """
-        This method can be used to change the appearance of the audio component.
-        """
-        Component.style(
-            self,
-            **kwargs,
-        )
-        return self
-
     def as_example(self, input_data: str | None) -> str:
         return Path(input_data).name if input_data else ""
 
 
-@document("style")
 class File(
     Changeable,
     Selectable,
@@ -2645,6 +2818,9 @@ class File(
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -2660,6 +2836,9 @@ class File(
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will allow users to upload a file; if False, can only be used to display files. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -2700,6 +2879,9 @@ class File(
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -2722,12 +2904,18 @@ class File(
         value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
         return {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -2832,19 +3020,6 @@ class File(
             }
             return d
 
-    def style(
-        self,
-        **kwargs,
-    ):
-        """
-        This method can be used to change the appearance of the file component.
-        """
-        Component.style(
-            self,
-            **kwargs,
-        )
-        return self
-
     def as_example(self, input_data: str | list | None) -> str:
         if input_data is None:
             return ""
@@ -2872,7 +3047,6 @@ class File(
             return self._multiple_file_example_inputs()
 
 
-@document("style")
 class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable):
     """
     Accepts or displays 2D input through a spreadsheet-like component for dataframes.
@@ -2899,6 +3073,8 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -2921,6 +3097,8 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will allow users to edit the dataframe; if False, can only be used to display data. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -2977,6 +3155,8 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
             label=label,
             every=every,
             show_label=show_label,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -3006,6 +3186,8 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
         max_cols: str | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
@@ -3014,6 +3196,8 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
             "max_cols": max_cols,
             "label": label,
             "show_label": show_label,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -3127,19 +3311,6 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
 
         return data
 
-    def style(
-        self,
-        **kwargs,
-    ):
-        """
-        This method can be used to change the appearance of the DataFrame component.
-        """
-        Component.style(
-            self,
-            **kwargs,
-        )
-        return self
-
     def as_example(self, input_data: pd.DataFrame | np.ndarray | str | None):
         if input_data is None:
             return ""
@@ -3150,7 +3321,6 @@ class Dataframe(Changeable, Inputable, Selectable, IOComponent, JSONSerializable
         return input_data
 
 
-@document("style")
 class Timeseries(Changeable, IOComponent, JSONSerializable):
     """
     Creates a component that can be used to upload/preview timeseries csv files or display a dataframe consisting of a time series graphically.
@@ -3170,6 +3340,9 @@ class Timeseries(Changeable, IOComponent, JSONSerializable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -3185,6 +3358,9 @@ class Timeseries(Changeable, IOComponent, JSONSerializable):
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             colors: an ordered list of colors to use for each line plot
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will allow users to upload a timeseries csv; if False, can only be used to display timeseries data. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -3200,6 +3376,9 @@ class Timeseries(Changeable, IOComponent, JSONSerializable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -3223,6 +3402,9 @@ class Timeseries(Changeable, IOComponent, JSONSerializable):
         colors: list[str] | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
     ):
@@ -3230,6 +3412,9 @@ class Timeseries(Changeable, IOComponent, JSONSerializable):
             "colors": colors,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "interactive": interactive,
             "visible": visible,
             "value": value,
@@ -3273,19 +3458,6 @@ class Timeseries(Changeable, IOComponent, JSONSerializable):
             return {"headers": y.columns.values.tolist(), "data": y.values.tolist()}
         raise ValueError("Cannot process value as Timeseries data")
 
-    def style(
-        self,
-        **kwargs,
-    ):
-        """
-        This method can be used to change the appearance of the TimeSeries component.
-        """
-        Component.style(
-            self,
-            **kwargs,
-        )
-        return self
-
     def as_example(self, input_data: str | None) -> str:
         return Path(input_data).name if input_data else ""
 
@@ -3327,7 +3499,6 @@ class Variable(State):
         return "state"
 
 
-@document("style")
 class Button(Clickable, IOComponent, StringSerializable):
     """
     Used to create a button, that can be assigned arbitrary click() events. The label (value) of the button can be used as an input or set via the output of a function.
@@ -3341,21 +3512,27 @@ class Button(Clickable, IOComponent, StringSerializable):
         self,
         value: str | Callable = "Run",
         *,
-        variant: str = "secondary",
+        variant: Literal["primary", "secondary", "stop"] = "secondary",
+        size: Literal["sm"] | Literal["lg"] | None = None,
         visible: bool = True,
         interactive: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         **kwargs,
     ):
         """
         Parameters:
             value: Default text for the button to display. If callable, the function will be called whenever the app loads to set the initial value of the component.
             variant: 'primary' for main call-to-action, 'secondary' for a more subdued style, 'stop' for a stop button.
+            size: Size of the button. Can be "sm" or "lg".
             visible: If False, component will be hidden.
             interactive: If False, the Button will be in a disabled state.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
         """
         IOComponent.__init__(
             self,
@@ -3364,33 +3541,45 @@ class Button(Clickable, IOComponent, StringSerializable):
             elem_classes=elem_classes,
             value=value,
             interactive=interactive,
+            scale=scale,
+            min_width=min_width,
             **kwargs,
         )
         if variant == "plain":
             warnings.warn("'plain' variant deprecated, using 'secondary' instead.")
             variant = "secondary"
         self.variant = variant
+        self.size = size
 
     def get_config(self):
         return {
             "value": self.value,
             "variant": self.variant,
+            "size": self.size,
             "interactive": self.interactive,
+            "scale": self.scale,
+            "min_width": self.min_width,
             **Component.get_config(self),
         }
 
     @staticmethod
     def update(
         value: str | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
-        variant: str | None = None,
+        variant: Literal["primary", "secondary", "stop"] | None = None,
+        size: Literal["sm"] | Literal["lg"] | None = None,
         visible: bool | None = None,
         interactive: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
     ):
         return {
             "variant": variant,
+            "size": size,
             "visible": visible,
             "value": value,
             "interactive": interactive,
+            "scale": scale,
+            "min_width": min_width,
             "__type__": "update",
         }
 
@@ -3398,25 +3587,25 @@ class Button(Clickable, IOComponent, StringSerializable):
         self,
         *,
         full_width: bool | None = None,
-        size: Literal["sm"] | Literal["lg"] | None = None,
+        size: Literal["sm", "lg"] | None = None,
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the button component.
-        Parameters:
-            full_width: If True, will expand to fill parent container.
-            size: Size of the button. Can be "sm" or "lg".
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
         if full_width is not None:
-            self._style["full_width"] = full_width
+            warnings.warn(
+                "Use `scale` in place of full_width in the constructor. scale=1 will make the button expand, whereas 0 will not."
+            )
+            self.scale = 1 if full_width else None
         if size is not None:
-            self._style["size"] = size
-
-        Component.style(self, **kwargs)
+            self.size = size
         return self
 
 
-@document("style")
 class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
     """
     Used to create an upload button, when cicked allows a user to upload files that satisfy the specified file type or generic files (if file_type not set).
@@ -3431,7 +3620,12 @@ class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
         label: str = "Upload a File",
         value: str | list[str] | Callable | None = None,
         *,
+        variant: Literal["primary", "secondary", "stop"] = "secondary",
         visible: bool = True,
+        size: Literal["sm"] | Literal["lg"] | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
+        interactive: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
         type: str = "file",
@@ -3441,14 +3635,19 @@ class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
     ):
         """
         Parameters:
-            value: Default text for the button to display.
+            label: Text to display on the button. Defaults to "Upload a File".
+            value: File or list of files to upload by default.
+            variant: 'primary' for main call-to-action, 'secondary' for a more subdued style, 'stop' for a stop button.
+            visible: If False, component will be hidden.
+            size: Size of the button. Can be "sm" or "lg".
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
+            interactive: If False, the UploadButton will be in a disabled state.
+            elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
+            elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
             type: Type of value to be returned by component. "file" returns a temporary file object with the same base name as the uploaded file, whose full path can be retrieved by file_obj.name, "binary" returns an bytes object.
             file_count: if single, allows user to upload one file. If "multiple", user uploads multiple files. If "directory", user uploads all files in selected directory. Return type will be list for each file in case of "multiple" or "directory".
             file_types: List of type of files to be uploaded. "file" allows any file to be uploaded, "image" allows only image files to be uploaded, "audio" allows only audio files to be uploaded, "video" allows only video files to be uploaded, "text" allows only text files to be uploaded.
-            label: Text to display on the button. Defaults to "Upload a File".
-            visible: If False, component will be hidden.
-            elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
-            elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
         """
         self.type = type
         self.file_count = file_count
@@ -3460,8 +3659,10 @@ class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
             raise ValueError(
                 f"Parameter file_types must be a list. Received {file_types.__class__.__name__}"
             )
+        self.size = size
         self.file_types = file_types
         self.label = label
+        self.variant = variant
         IOComponent.__init__(
             self,
             label=label,
@@ -3469,6 +3670,9 @@ class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
             elem_id=elem_id,
             elem_classes=elem_classes,
             value=value,
+            scale=scale,
+            min_width=min_width,
+            interactive=interactive,
             **kwargs,
         )
 
@@ -3476,21 +3680,37 @@ class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
         return {
             "label": self.label,
             "value": self.value,
+            "size": self.size,
             "file_count": self.file_count,
             "file_types": self.file_types,
+            "scale": self.scale,
+            "min_width": self.min_width,
+            "variant": self.variant,
+            "interactive": self.interactive,
             **Component.get_config(self),
         }
 
     @staticmethod
     def update(
-        value: str | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
+        value: str
+        | list[str]
+        | Literal[_Keywords.NO_VALUE]
+        | None = _Keywords.NO_VALUE,
+        size: Literal["sm"] | Literal["lg"] | None = None,
+        variant: Literal["primary", "secondary", "stop"] | None = None,
         interactive: bool | None = None,
         visible: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
     ):
         return {
+            "variant": variant,
             "interactive": interactive,
+            "size": size,
             "visible": visible,
             "value": value,
+            "scale": scale,
+            "min_width": min_width,
             "__type__": "update",
         }
 
@@ -3560,25 +3780,25 @@ class UploadButton(Clickable, Uploadable, IOComponent, FileSerializable):
         self,
         *,
         full_width: bool | None = None,
-        size: Literal["sm"] | Literal["lg"] | None = None,
+        size: Literal["sm", "lg"] | None = None,
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the button component.
-        Parameters:
-            full_width: If True, will expand to fill parent container.
-            size: Size of the button. Can be "sm" or "lg".
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
         if full_width is not None:
-            self._style["full_width"] = full_width
+            warnings.warn(
+                "Use `scale` in place of full_width in the constructor. scale=1 will make the button expand, whereas 0 will not."
+            )
+            self.scale = 1 if full_width else None
         if size is not None:
-            self._style["size"] = size
-
-        Component.style(self, **kwargs)
+            self.size = size
         return self
 
 
-@document("style")
 class ColorPicker(
     Changeable, Inputable, Submittable, Blurrable, IOComponent, StringSerializable
 ):
@@ -3598,6 +3818,9 @@ class ColorPicker(
         info: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         interactive: bool | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -3611,6 +3834,9 @@ class ColorPicker(
             info: additional component description.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             interactive: if True, will be rendered as an editable color picker; if False, editing will be disabled. If not provided, this is inferred based on whether the component is used as an input or output.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -3623,6 +3849,9 @@ class ColorPicker(
             info=info,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             interactive=interactive,
             visible=visible,
             elem_id=elem_id,
@@ -3648,6 +3877,9 @@ class ColorPicker(
         value: str | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
         interactive: bool | None = None,
     ):
@@ -3655,6 +3887,9 @@ class ColorPicker(
             "value": value,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "interactive": interactive,
             "__type__": "update",
@@ -3692,7 +3927,6 @@ class ColorPicker(
 ############################
 
 
-@document("style")
 class Label(Changeable, Selectable, IOComponent, JSONSerializable):
     """
     Displays a classification label, along with confidence scores of top categories, if provided.
@@ -3713,6 +3947,9 @@ class Label(Changeable, Selectable, IOComponent, JSONSerializable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -3726,6 +3963,9 @@ class Label(Changeable, Selectable, IOComponent, JSONSerializable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -3744,6 +3984,9 @@ class Label(Changeable, Selectable, IOComponent, JSONSerializable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -3801,6 +4044,9 @@ class Label(Changeable, Selectable, IOComponent, JSONSerializable):
         | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
         color: str | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
     ):
@@ -3817,6 +4063,9 @@ class Label(Changeable, Selectable, IOComponent, JSONSerializable):
         return {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "color": color,
@@ -3829,15 +4078,16 @@ class Label(Changeable, Selectable, IOComponent, JSONSerializable):
         container: bool | None = None,
     ):
         """
-        This method can be used to change the appearance of the label component.
-        Parameters:
-            container: If True, will add a container to the label - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        Component.style(self, container=container)
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
+        if container is not None:
+            self.container = container
         return self
 
 
-@document("style")
 class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
     """
     Displays text that contains spans that are highlighted by category or numerical value.
@@ -3860,6 +4110,9 @@ class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -3874,15 +4127,14 @@ class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
         """
         self.color_map = color_map
-        if color_map is not None:
-            warnings.warn(
-                "The 'color_map' parameter has been moved from the constructor to `HighlightedText.style()` ",
-            )
         self.show_legend = show_legend
         self.combine_adjacent = combine_adjacent
         self.adjacent_separator = adjacent_separator
@@ -3897,6 +4149,9 @@ class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -3923,6 +4178,9 @@ class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
         show_legend: bool | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         updated_config = {
@@ -3930,6 +4188,9 @@ class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
             "show_legend": show_legend,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "__type__": "update",
@@ -4001,19 +4262,18 @@ class HighlightedText(Changeable, Selectable, IOComponent, JSONSerializable):
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the HighlightedText component.
-        Parameters:
-            color_map: Map between category and respective colors.
-            container: If True, will place the component in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
+        if container is not None:
+            self.container = container
         if color_map is not None:
-            self._style["color_map"] = color_map
-
-        Component.style(self, container=container, **kwargs)
+            self.color_map = color_map
         return self
 
 
-@document("style")
 class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
     """
     Displays a base image and colored subsections on top of that image. Subsections can take the from of rectangles (e.g. object detection) or masks (e.g. image segmentation).
@@ -4032,9 +4292,15 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
         | None = None,
         *,
         show_legend: bool = True,
+        height: int | None = None,
+        width: int | None = None,
+        color_map: dict[str, str] | None = None,
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -4044,14 +4310,23 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
         Parameters:
             value: Tuple of base image and list of (subsection, label) pairs.
             show_legend: If True, will show a legend of the subsections.
+            height: Height of the displayed image.
+            width: Width of the displayed image.
+            color_map: A dictionary mapping labels to colors. The colors must be specified as hex codes.
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
         """
         self.show_legend = show_legend
+        self.height = height
+        self.width = width
+        self.color_map = color_map
         self.select: EventListenerMethod
         """
         Event listener for when the user selects Image subsection.
@@ -4063,6 +4338,9 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -4074,6 +4352,9 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
         return {
             "show_legend": self.show_legend,
             "value": self.value,
+            "height": self.height,
+            "width": self.width,
+            "color_map": self.color_map,
             "selectable": self.selectable,
             **IOComponent.get_config(self),
         }
@@ -4086,14 +4367,26 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
         ]
         | Literal[_Keywords.NO_VALUE] = _Keywords.NO_VALUE,
         show_legend: bool | None = None,
+        height: int | None = None,
+        width: int | None = None,
+        color_map: dict[str, str] | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         updated_config = {
             "show_legend": show_legend,
+            "height": height,
+            "width": width,
+            "color_map": color_map,
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "__type__": "update",
@@ -4133,7 +4426,7 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
         self.temp_files.add(base_img_path)
 
         sections = []
-        color_map = self._style.get("color_map", {})
+        color_map = self.color_map or {}
 
         def hex_to_rgb(value):
             value = value.lstrip("#")
@@ -4189,23 +4482,20 @@ class AnnotatedImage(Selectable, IOComponent, JSONSerializable):
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the Image component.
-        Parameters:
-            height: Height of the image.
-            width: Width of the image.
-            color_map: A dictionary mapping labels to colors. The colors must be specified as hex codes.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        self._style["height"] = height
-        self._style["width"] = width
-        self._style["color_map"] = color_map
-        Component.style(
-            self,
-            **kwargs,
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
         )
+        if height is not None:
+            self.height = height
+        if width is not None:
+            self.width = width
+        if color_map is not None:
+            self.color_map = color_map
         return self
 
 
-@document("style")
 class JSON(Changeable, IOComponent, JSONSerializable):
     """
     Used to display arbitrary JSON output prettily.
@@ -4222,6 +4512,9 @@ class JSON(Changeable, IOComponent, JSONSerializable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -4233,6 +4526,9 @@ class JSON(Changeable, IOComponent, JSONSerializable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -4242,6 +4538,9 @@ class JSON(Changeable, IOComponent, JSONSerializable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -4260,11 +4559,17 @@ class JSON(Changeable, IOComponent, JSONSerializable):
         value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "__type__": "update",
@@ -4287,11 +4592,13 @@ class JSON(Changeable, IOComponent, JSONSerializable):
 
     def style(self, *, container: bool | None = None, **kwargs):
         """
-        This method can be used to change the appearance of the JSON component.
-        Parameters:
-            container: If True, will place the JSON in a container - providing some extra padding around the border.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        Component.style(self, container=container, **kwargs)
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
+        if container is not None:
+            self.container = container
         return self
 
 
@@ -4324,6 +4631,8 @@ class HTML(Changeable, IOComponent, StringSerializable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -4362,11 +4671,7 @@ class HTML(Changeable, IOComponent, StringSerializable):
         }
         return updated_config
 
-    def style(self):
-        return self
 
-
-@document("style")
 class Gallery(IOComponent, GallerySerializable, Selectable):
     """
     Used to display a list of images as a gallery that can be scrolled through.
@@ -4383,9 +4688,17 @@ class Gallery(IOComponent, GallerySerializable, Selectable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
+        columns: int | tuple | None = 2,
+        rows: int | tuple | None = None,
+        height: str | None = None,
+        preview: bool | None = None,
+        object_fit: str | None = None,
         **kwargs,
     ):
         """
@@ -4394,10 +4707,23 @@ class Gallery(IOComponent, GallerySerializable, Selectable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
+            columns: Represents the number of images that should be shown in one row, for each of the six standard screen sizes (<576px, <768px, <992px, <1200px, <1400px, >1400px). if fewer that 6 are given then the last will be used for all subsequent breakpoints
+            rows: Represents the number of rows in the image grid, for each of the six standard screen sizes (<576px, <768px, <992px, <1200px, <1400px, >1400px). if fewer that 6 are given then the last will be used for all subsequent breakpoints
+            height: Height of the gallery.
+            preview: If True, will display the Gallery in preview mode, which shows all of the images as thumbnails and allows the user to click on them to view them in full size.
+            object_fit: CSS object-fit property for the thumbnail images in the gallery. Can be "contain", "cover", "fill", "none", or "scale-down".
         """
+        self.grid_cols = columns
+        self.grid_rows = rows
+        self.height = height
+        self.preview = preview
+        self.object_fit = object_fit
         self.select: EventListenerMethod
         """
         Event listener for when the user selects image within Gallery.
@@ -4409,6 +4735,9 @@ class Gallery(IOComponent, GallerySerializable, Selectable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -4421,13 +4750,29 @@ class Gallery(IOComponent, GallerySerializable, Selectable):
         value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
+        columns: int | tuple | None = None,
+        rows: int | tuple | None = None,
+        height: str | None = None,
+        preview: bool | None = None,
+        object_fit: str | None = None,
     ):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
+            "grid_cols": columns,
+            "grid_rows": rows,
+            "height": height,
+            "preview": preview,
+            "object_fit": object_fit,
             "__type__": "update",
         }
         return updated_config
@@ -4435,6 +4780,11 @@ class Gallery(IOComponent, GallerySerializable, Selectable):
     def get_config(self):
         return {
             "value": self.value,
+            "grid_cols": self.grid_cols,
+            "grid_rows": self.grid_rows,
+            "height": self.height,
+            "preview": self.preview,
+            "object_fit": self.object_fit,
             **IOComponent.get_config(self),
         }
 
@@ -4495,32 +4845,28 @@ class Gallery(IOComponent, GallerySerializable, Selectable):
         **kwargs,
     ):
         """
-        This method can be used to change the appearance of the gallery component.
-        Parameters:
-            grid: ('grid' has been renamed to 'columns') Represents the number of images that should be shown in one row, for each of the six standard screen sizes (<576px, <768px, <992px, <1200px, <1400px, >1400px). if fewer that 6 are given then the last will be used for all subsequent breakpoints            columns: Represents the number of columns in the image grid, for each of the six standard screen sizes (<576px, <768px, <992px, <1200px, <1400px, >1400px). if fewer that 6 are given then the last will be used for all subsequent breakpoints
-            rows: Represents the number of rows in the image grid, for each of the six standard screen sizes (<576px, <768px, <992px, <1200px, <1400px, >1400px). if fewer that 6 are given then the last will be used for all subsequent breakpoints
-            height: Height of the gallery.
-            container: If True, will place gallery in a container - providing some extra padding around the border.
-            preview: If True, will display the Gallery in preview mode, which shows all of the images as thumbnails and allows the user to click on them to view them in full size.
-            object_fit: CSS object-fit property for the thumbnail images in the gallery. Can be "contain", "cover", "fill", "none", or "scale-down".
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
+        )
         if grid is not None:
             warnings.warn(
-                "The 'grid' parameter will be deprecated. Please use 'columns' instead.",
+                "The 'grid' parameter will be deprecated. Please use 'grid_cols' in the constructor instead.",
             )
-            self._style["grid_cols"] = grid
+            self.grid_cols = grid
         if columns is not None:
-            self._style["grid_cols"] = columns
+            self.grid_cols = columns
         if rows is not None:
-            self._style["grid_rows"] = rows
+            self.grid_rows = rows
         if height is not None:
-            self._style["height"] = height
+            self.height = height
         if preview is not None:
-            self._style["preview"] = preview
+            self.preview = preview
         if object_fit is not None:
-            self._style["object_fit"] = object_fit
-
-        Component.style(self, container=container, **kwargs)
+            self.object_fit = object_fit
+        if container is not None:
+            self.container = container
         return self
 
 
@@ -4540,7 +4886,6 @@ class Carousel(IOComponent, Changeable, SimpleSerializable):
         )
 
 
-@document("style")
 class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
     """
     Displays a chatbot output showing both user submitted messages and responses. Supports a subset of Markdown including bold, italics, code, and images.
@@ -4561,9 +4906,13 @@ class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
+        height: int | None = None,
         **kwargs,
     ):
         """
@@ -4572,9 +4921,13 @@ class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
+            height: height of the component in pixels.
         """
         if color_map is not None:
             warnings.warn(
@@ -4586,12 +4939,16 @@ class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
         Uses event data gradio.SelectData to carry `value` referring to text of selected message, and `index` tuple to refer to [message, participant] index.
         See EventData documentation on how to use this event data.
         """
+        self.height = height
 
         IOComponent.__init__(
             self,
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -4603,6 +4960,7 @@ class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
         return {
             "value": self.value,
             "selectable": self.selectable,
+            "height": self.height,
             **IOComponent.get_config(self),
         }
 
@@ -4613,13 +4971,21 @@ class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
         | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
+        height: int | None = None,
     ):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
+            "height": height,
             "__type__": "update",
         }
         return updated_config
@@ -4715,21 +5081,16 @@ class Chatbot(Changeable, Selectable, IOComponent, JSONSerializable):
 
     def style(self, height: int | None = None, **kwargs):
         """
-        This method can be used to change the appearance of the Chatbot component.
+        This method is deprecated. Please set these arguments in the constructor instead.
         """
-        if height is not None:
-            self._style["height"] = height
-        if kwargs.get("color_map") is not None:
-            warnings.warn("The 'color_map' parameter has been deprecated.")
-
-        Component.style(
-            self,
-            **kwargs,
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
         )
+        if height is not None:
+            self.height = height
         return self
 
 
-@document("style")
 class Model3D(
     Changeable, Uploadable, Editable, Clearable, IOComponent, FileSerializable
 ):
@@ -4750,6 +5111,9 @@ class Model3D(
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -4762,6 +5126,9 @@ class Model3D(
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -4772,6 +5139,9 @@ class Model3D(
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -4797,11 +5167,17 @@ class Model3D(
         value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "__type__": "update",
@@ -4845,16 +5221,6 @@ class Model3D(
         }
         return data
 
-    def style(self, **kwargs):
-        """
-        This method can be used to change the appearance of the Model3D component.
-        """
-        Component.style(
-            self,
-            **kwargs,
-        )
-        return self
-
     def as_example(self, input_data: str | None) -> str:
         return Path(input_data).name if input_data else ""
 
@@ -4877,6 +5243,9 @@ class Plot(Changeable, Clearable, IOComponent, JSONSerializable):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -4888,6 +5257,9 @@ class Plot(Changeable, Clearable, IOComponent, JSONSerializable):
             label: component name in interface.
             every: If `value` is a callable, run the function 'every' number of seconds while the client connection is open. Has no effect otherwise. Queue must be enabled. The event can be accessed (e.g. to cancel it) via this component's .load_event attribute.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -4897,6 +5269,9 @@ class Plot(Changeable, Clearable, IOComponent, JSONSerializable):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -4922,11 +5297,17 @@ class Plot(Changeable, Clearable, IOComponent, JSONSerializable):
         value: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "__type__": "update",
@@ -4959,10 +5340,14 @@ class Plot(Changeable, Clearable, IOComponent, JSONSerializable):
         return {"type": dtype, "plot": out_y}
 
     def style(self, container: bool | None = None):
-        Component.style(
-            self,
-            container=container,
+        """
+        This method is deprecated. Please set these arguments in the constructor instead.
+        """
+        warnings.warn(
+            "The `style` method is deprecated. Please set these arguments in the constructor instead."
         )
+        if container is not None:
+            self.container = container
         return self
 
 
@@ -5022,6 +5407,9 @@ class ScatterPlot(Plot):
         label: str | None = None,
         every: float | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -5083,6 +5471,9 @@ class ScatterPlot(Plot):
             label=label,
             every=every,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -5122,6 +5513,9 @@ class ScatterPlot(Plot):
         caption: str | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         """Update an existing plot component.
@@ -5196,6 +5590,9 @@ class ScatterPlot(Plot):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "caption": caption,
@@ -5364,6 +5761,9 @@ class LinePlot(Plot):
         interactive: bool | None = True,
         label: str | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         every: float | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -5421,6 +5821,9 @@ class LinePlot(Plot):
             value=value,
             label=label,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -5459,6 +5862,9 @@ class LinePlot(Plot):
         caption: str | None = None,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
     ):
         """Update an existing plot component.
@@ -5529,6 +5935,9 @@ class LinePlot(Plot):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "caption": caption,
@@ -5700,6 +6109,9 @@ class BarPlot(Plot):
         interactive: bool | None = True,
         label: str | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         every: float | None = None,
         visible: bool = True,
         elem_id: str | None = None,
@@ -5754,6 +6166,9 @@ class BarPlot(Plot):
             value=value,
             label=label,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -5790,6 +6205,9 @@ class BarPlot(Plot):
         interactive: bool | None = None,
         label: str | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
     ):
         """Update an existing BarPlot component.
@@ -5856,6 +6274,9 @@ class BarPlot(Plot):
         updated_config = {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "caption": caption,
@@ -6050,9 +6471,6 @@ class Markdown(IOComponent, Changeable, StringSerializable):
         }
         return updated_config
 
-    def style(self):
-        return self
-
     def as_example(self, input_data: str | None) -> str:
         postprocessed = self.postprocess(input_data)
         return postprocessed if postprocessed else ""
@@ -6090,6 +6508,9 @@ class Code(Changeable, Inputable, IOComponent, StringSerializable):
         label: str | None = None,
         interactive: bool | None = None,
         show_label: bool = True,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
@@ -6102,6 +6523,9 @@ class Code(Changeable, Inputable, IOComponent, StringSerializable):
             label: component name in interface.
             interactive: Whether user should be able to enter code or only view it.
             show_label: if True, will display label.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
@@ -6114,6 +6538,9 @@ class Code(Changeable, Inputable, IOComponent, StringSerializable):
             label=label,
             interactive=interactive,
             show_label=show_label,
+            container=container,
+            scale=scale,
+            min_width=min_width,
             visible=visible,
             elem_id=elem_id,
             elem_classes=elem_classes,
@@ -6146,6 +6573,9 @@ class Code(Changeable, Inputable, IOComponent, StringSerializable):
         | Literal[_Keywords.NO_VALUE] = _Keywords.NO_VALUE,
         label: str | None = None,
         show_label: bool | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
         visible: bool | None = None,
         language: str | None = None,
         interactive: bool | None = None,
@@ -6153,6 +6583,9 @@ class Code(Changeable, Inputable, IOComponent, StringSerializable):
         return {
             "label": label,
             "show_label": show_label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "visible": visible,
             "value": value,
             "language": language,
@@ -6160,16 +6593,12 @@ class Code(Changeable, Inputable, IOComponent, StringSerializable):
             "__type__": "update",
         }
 
-    def style(self):
-        return self
-
 
 ############################
 # Special Components
 ############################
 
 
-@document("style")
 class Dataset(Clickable, Selectable, Component, StringSerializable):
     """
     Used to create an output widget for showing datasets. Used to render the examples
@@ -6190,6 +6619,9 @@ class Dataset(Clickable, Selectable, Component, StringSerializable):
         visible: bool = True,
         elem_id: str | None = None,
         elem_classes: list[str] | str | None = None,
+        container: bool = True,
+        scale: int | None = None,
+        min_width: int = 160,
         **kwargs,
     ):
         """
@@ -6202,10 +6634,16 @@ class Dataset(Clickable, Selectable, Component, StringSerializable):
             visible: If False, component will be hidden.
             elem_id: An optional string that is assigned as the id of this component in the HTML DOM. Can be used for targeting CSS styles.
             elem_classes: An optional list of strings that are assigned as the classes of this component in the HTML DOM. Can be used for targeting CSS styles.
+            container: If True, will place the component in a container - providing some extra padding around the border.
+            scale: relative width compared to adjacent Components in a Row. For example, if Component A has scale=2, and Component B has scale=1, A will be twice as wide as B. Should be an integer.
+            min_width: minimum pixel width, will wrap if not sufficient screen space to satisfy this value. If a certain scale value results in this Component being narrower than min_width, the min_width parameter will be respected first.
         """
         Component.__init__(
             self, visible=visible, elem_id=elem_id, elem_classes=elem_classes, **kwargs
         )
+        self.container = container
+        self.scale = scale
+        self.min_width = min_width
         self.components = [get_component_instance(c, render=False) for c in components]
 
         # Narrow type to IOComponent
@@ -6238,6 +6676,9 @@ class Dataset(Clickable, Selectable, Component, StringSerializable):
             "type": self.type,
             "label": self.label,
             "samples_per_page": self.samples_per_page,
+            "container": self.container,
+            "scale": self.scale,
+            "min_width": self.min_width,
             **Component.get_config(self),
         }
 
@@ -6246,11 +6687,17 @@ class Dataset(Clickable, Selectable, Component, StringSerializable):
         samples: Any | Literal[_Keywords.NO_VALUE] | None = _Keywords.NO_VALUE,
         visible: bool | None = None,
         label: str | None = None,
+        container: bool | None = None,
+        scale: int | None = None,
+        min_width: int | None = None,
     ):
         return {
             "samples": samples,
             "visible": visible,
             "label": label,
+            "container": container,
+            "scale": scale,
+            "min_width": min_width,
             "__type__": "update",
         }
 
@@ -6268,13 +6715,6 @@ class Dataset(Clickable, Selectable, Component, StringSerializable):
             "samples": samples,
             "__type__": "update",
         }
-
-    def style(self, **kwargs):
-        """
-        This method can be used to change the appearance of the Dataset component.
-        """
-        Component.style(self, **kwargs)
-        return self
 
 
 @document()
@@ -6324,9 +6764,6 @@ class Interpretation(Component, SimpleSerializable):
             "value": value,
             "__type__": "update",
         }
-
-    def style(self):
-        return self
 
 
 class StatusTracker(Component, SimpleSerializable):
