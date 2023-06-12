@@ -1,5 +1,7 @@
 import gradio as gr
 import numpy as np
+import cv2
+
 
 first_time = True
 input_img_original = None
@@ -73,13 +75,14 @@ with gr.Blocks() as demo:
 
     input_img.select(move_selection, [input_img, tolerance], input_img)
 
+    move_no = 0
     def changed_objects_handler(input_data, evt: gr.SelectData):
-        global base_layer
-        global changed_objects
+        global base_layer, changed_objects, move_no
+        move_no += 1
 
         pos_x, pos_y = evt.index
         obj_id = evt.value
-        print(f"obj {obj_id} moved to {pos_x}, {pos_y}")
+        print(f"obj {obj_id} moved by {pos_x}, {pos_y}")
 
         img = base_layer
         for obj in changed_objects:
@@ -96,15 +99,20 @@ with gr.Blocks() as demo:
                     new_j = j + pos_x
                     if new_i >= 0 and new_i < img.shape[0] and new_j >= 0 and new_j < img.shape[1]:
                         new_img[new_i, new_j] = img[i, j]                        
-                    base_layer[i, j] = 0
+                    img[i, j] = 0
 
         changed_objects.append({'id': obj_id, 'img': new_img})
         composited_img = composite_all_layers(base_layer, changed_objects)
+        
+        # Use this to prove the composited image is correct. Gradio display is not working.
+        filename = str(f"composited_imge_{move_no}") + ".png"
+        cv2.imwrite(filename, composited_img[:, :, 0:2])
+
         return composited_img
     
-    def composite_all_layers(base_layer, changed_objects):
-        img = base_layer.copy()
-        for obj in changed_objects:
+    def composite_all_layers(base, objects):
+        img = base.copy()
+        for obj in objects:
             for i in range(obj['img'].shape[0]):
                 for j in range(obj['img'].shape[1]):
                     if obj['img'][i, j, 3] != 0:
