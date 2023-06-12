@@ -8,16 +8,16 @@ input_img_original = None
 with gr.Blocks() as demo:
     tolerance = gr.Slider(label="Tolerance", info="How different colors can be in a segment.", minimum=0, maximum=256*3, value=50)
     with gr.Row():
-        #input_img = gr.Image(label="Input", tool="editor")
-        input_img = gr.Image(label="Input", tool="sketch")
+        input_img = gr.Image(label="Input", tool="editor")
         print("input image config", input_img.get_config())
 #    with gr.Row():
         segmented_img = gr.Image(label="Segmented", tool="sketch")
         print("segment image config", segmented_img.get_config())
-        composed_img = gr.Image(label="Composed", tool="sketch")
+        composed_img = gr.outputs.Image(label="Composed", type='numpy')
         print("composed image config", composed_img.get_config()) #strangely, these two need to be in the same Row, perhaps due to shared np array 
     with gr.Row():
         segment_btn = gr.Button("Segment image")
+        compose_btn = gr.Button("Compose image")
 
     def move_selection(img, d, evt: gr.SelectData):
         """Returns an image with the selected segment highlighted."""
@@ -54,10 +54,9 @@ with gr.Blocks() as demo:
 
     base_layer = None
     changed_objects = []
-
-    def get_segment (input_data):
+    composed_img_updated = None
+    def get_segment (img_orig):
         global base_layer
-        img_orig = input_data['image']
         img_segmented = np.zeros((img_orig.shape[0], img_orig.shape[1], 4), dtype=np.uint8)
 
         # Divide the image into 9 even squares
@@ -77,7 +76,7 @@ with gr.Blocks() as demo:
 
     move_no = 0
     def changed_objects_handler(input_data, evt: gr.SelectData):
-        global base_layer, changed_objects, move_no
+        global base_layer, changed_objects, move_no, composed_img_updated
         move_no += 1
 
         pos_x, pos_y = evt.index
@@ -102,13 +101,13 @@ with gr.Blocks() as demo:
                     img[i, j] = 0
 
         changed_objects.append({'id': obj_id, 'img': new_img})
-        composited_img = composite_all_layers(base_layer, changed_objects)
+        composed_img_updated = composite_all_layers(base_layer, changed_objects)
         
         # Use this to prove the composited image is correct. Gradio display is not working.
         filename = str(f"composited_imge_{move_no}") + ".png"
-        cv2.imwrite(filename, composited_img[:, :, 0:2])
+        cv2.imwrite(filename, composed_img_updated[:, :, 0:3])
 
-        return composited_img
+        return 
     
     def composite_all_layers(base, objects):
         img = base.copy()
@@ -119,9 +118,14 @@ with gr.Blocks() as demo:
                         img[i, j] = obj['img'][i, j]
         return img
     
-    segmented_img.select (changed_objects_handler, segmented_img, composed_img)
+    def get_composed():
+        global composed_img_updated
+        return composed_img_updated.copy()
+    
+    segmented_img.select (changed_objects_handler, segmented_img, [])
     
     segment_btn.click(get_segment, input_img, segmented_img)
+    compose_btn.click(get_composed, [], composed_img)
 
 #    input_img.selection_move(get_selection_move_data, input_img, input_img)
 

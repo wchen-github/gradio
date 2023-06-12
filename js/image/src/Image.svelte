@@ -274,19 +274,13 @@
 				/>
 
 				<!-- svelte-ignore a11y-click-events-have-key-events -->
-				<!-- on:click={handle_click} -->
-				<canvas
 				<img
 					src={value}
 					alt=""
 					class:scale-x-[-1]={source === "webcam" && mirror_webcam}
 					class:selectable
-					on:mousedown={handle_move_start}
-					on:mousemove={handle_move}
-					on:mouseup={handle_move_end}
-					id="select_image"
-				/>
-				/>
+					on:click={handle_click}
+					/>
 			{:else if (tool === "sketch" || tool === "color-sketch") && (value !== null || static_image)}
 				{#key static_image}
 					<img
