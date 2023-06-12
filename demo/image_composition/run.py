@@ -13,7 +13,7 @@ with gr.Blocks() as demo:
 #    with gr.Row():
         segmented_img = gr.Image(label="Segmented", tool="sketch")
         print("segment image config", segmented_img.get_config())
-        composed_img = gr.outputs.Image(label="Composed", type='numpy')
+        composed_img = gr.Image(label="Composed", type='numpy')
         print("composed image config", composed_img.get_config()) #strangely, these two need to be in the same Row, perhaps due to shared np array 
     with gr.Row():
         segment_btn = gr.Button("Segment image")
