@@ -8,6 +8,7 @@
 
 	import Cropper from "./Cropper.svelte";
 	import Sketch from "./Sketch.svelte";
+	import Compose from "./Compose.svelte";
 	import Webcam from "./Webcam.svelte";
 	import ModifySketch from "./ModifySketch.svelte";
 	import SketchSettings from "./SketchSettings.svelte";
@@ -22,7 +23,7 @@
 	export let show_label: boolean;
 
 	export let source: "canvas" | "webcam" | "upload" = "upload";
-	export let tool: "editor" | "select" | "sketch" | "color-sketch" = "editor";
+	export let tool: "editor" | "select" | "sketch" | "color-sketch" = "editor" | "compose";
 	export let shape: [number, number];
 	export let streaming: boolean = false;
 	export let pending: boolean = false;
@@ -31,12 +32,13 @@
 	export let selectable: boolean = false;
 
 	let sketch: Sketch;
+	let compose: Compose;
 	let cropper: Cropper;
 
 	if (
 		value &&
 		(source === "upload" || source === "webcam") &&
-		tool === "sketch"
+		(tool === "sketch" || tool === "compose")
 	) {
 		value = { image: value as string, mask: null };
 	}
@@ -46,7 +48,7 @@
 			static_image = detail;
 		} else {
 			value =
-				(source === "upload" || source === "webcam") && tool === "sketch"
+				(source === "upload" || source === "webcam") && (tool === "sketch" || tool === "compose")
 					? { image: detail, mask: null }
 					: detail;
 		}
@@ -74,7 +76,7 @@
 			}
 		} else if (
 			(source === "upload" || source === "webcam") &&
-			tool === "sketch"
+			(tool === "sketch" || tool === "compose")
 		) {
 			value = { image: detail, mask: null };
 		} else {
@@ -121,6 +123,8 @@
 		console.log("image.svelte handle_image_load img_width:", img_width);
 		console.log("image.svelte handle_image_load img_height:", img_height);	
 		console.log("image.svelte handle_image_load container_height:", container_height);
+		console.log(event);
+		console.log(element);
 	}
 
 	async function handle_sketch_clear() {
@@ -142,13 +146,13 @@
 	let mode;
 
 	$: {
-		if (source === "canvas" && tool === "sketch") {
+		if (source === "canvas" && (tool === "sketch" || tool === "compose") ) {
 			mode = "bw-sketch";
 		} else if (tool === "color-sketch") {
 			mode = "color-sketch";
 		} else if (
 			(source === "upload" || source === "webcam") &&
-			tool === "sketch"
+			(tool === "sketch" || tool === "compose")
 		) {
 			mode = "mask";
 		} else {
@@ -179,6 +183,12 @@
 				cropper.destroy();
 			}
 		}
+	}
+
+	$: {
+		console.log("image.svelte source:", source);
+		console.log("image.svelte tool:", tool);
+		console.log("image.svelte mode:", mode);
 	}
 
 	onMount(async () => {
@@ -239,6 +249,7 @@
 		}
 	};
 
+	
 </script>
 
 <BlockLabel
@@ -281,7 +292,7 @@
 					class:selectable
 					on:click={handle_click}
 					/>
-			{:else if (tool === "sketch" || tool === "color-sketch") && (value !== null || static_image)}
+			{:else if ((tool === "sketch" || tool === "compose") || tool === "color-sketch") && (value !== null || static_image)}
 				{#key static_image}
 					<img
 						bind:this={value_img}
@@ -314,7 +325,7 @@
 						on:clear_mask={handle_mask_clear}
 						on:remove_image={handle_sketch_clear}
 					/>
-					{#if tool === "color-sketch" || tool === "sketch"}
+					{#if tool === "color-sketch" || (tool === "sketch" || tool === "compose")}
 						<SketchSettings
 							bind:brush_radius
 							bind:brush_color
@@ -336,7 +347,8 @@
 				/>
 			{/if}
 		</Upload>
-	{:else if source === "canvas"}
+	
+		{:else if source === "canvas"}
 		<ModifySketch
 			on:undo={() => sketch.undo()}
 			on:remove_image={handle_sketch_clear}
@@ -355,6 +367,19 @@
 			bind:brush_radius
 			bind:brush_color
 			bind:this={sketch}
+			on:change={handle_save}
+			on:clear={handle_sketch_clear}
+			{mode}
+			width={img_width || max_width}
+			height={img_height || max_height}
+			container_height={container_height || max_height}
+			{shape}
+		/>
+		<Compose
+			{value}
+			bind:brush_radius
+			bind:brush_color
+			bind:this={compose}
 			on:change={handle_save}
 			on:clear={handle_sketch_clear}
 			{mode}
@@ -393,7 +418,7 @@
 			class:webcam={source === "webcam" && mirror_webcam}
 			on:click={handle_click}
 		/>
-	{:else if (tool === "sketch" || tool === "color-sketch") && (value !== null || static_image)}
+	{:else if ((tool === "sketch" || tool === "compose") || tool === "color-sketch") && (value !== null || static_image)}
 		{#key static_image}
 			<img
 				bind:this={value_img}
@@ -422,7 +447,7 @@
 				on:undo={() => sketch.undo()}
 				on:remove_image={handle_sketch_clear}
 			/>
-			{#if tool === "color-sketch" || tool === "sketch"}
+			{#if tool === "color-sketch" || (tool === "sketch" || tool === "compose")}
 				<SketchSettings
 					bind:brush_radius
 					bind:brush_color

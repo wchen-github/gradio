@@ -11,7 +11,7 @@ with gr.Blocks() as demo:
         input_img = gr.Image(label="Input", tool="editor")
         print("input image config", input_img.get_config())
 #    with gr.Row():
-        segmented_img = gr.Image(label="Segmented", tool="sketch")
+        segmented_img = gr.Image(label="Segmented", tool="compose")
         print("segment image config", segmented_img.get_config())
         composed_img = gr.Image(label="Composed", type='numpy')
         print("composed image config", composed_img.get_config()) #strangely, these two need to be in the same Row, perhaps due to shared np array 
