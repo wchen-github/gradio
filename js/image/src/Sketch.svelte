@@ -2,10 +2,9 @@
 	// @ts-nocheck
 
 	import { onMount, onDestroy, createEventDispatcher, tick } from "svelte";
-	import { draw, fade } from "svelte/transition";
+	import { fade } from "svelte/transition";
 	import { LazyBrush } from "lazy-brush/src";
 	import ResizeObserver from "resize-observer-polyfill";
-	import { get_coordinates_of_clicked_image } from "./utils";
 
 	const dispatch = createEventDispatcher();
 
@@ -20,15 +19,9 @@
 	export let height = 200;
 	export let container_height = 200;
 	export let shape;
-	
-	$: {
-		console.log('source = ', source, 'mode = ', mode, 'width = ', width, 'height = ', height, 'container_height = ', container_height);	
-	}
 
 	$: {
 		if (shape && (width || height)) {
-			console.log("shape and width or height");
-			console.log(shape, width, height);
 			width = shape[0];
 			height = shape[1];
 		}
@@ -65,7 +58,7 @@
 				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
 
 				draw_lines({ lines: lines.slice() });
-				trigger_on_change('line 66');
+				trigger_on_change();
 			}, 50);
 		}
 	}
@@ -84,7 +77,7 @@
 		},
 		{
 			name: "drawing",
-			zIndex: 16
+			zIndex: 11
 		},
 		{
 			name: "temp",
@@ -112,66 +105,13 @@
 	let canvas_container = null;
 	let canvas_observer = null;
 	let line_count = 0;
-	let value_img_data_original = null;
-	let value_img_data_opaque = null;
-	let value_img_opaque = null;
-	
-	function imagedata_to_image (imagedata) {
-		var canvas = document.createElement ('canvas');
-		var ctx = canvas.getContext ('2d');
-		canvas.width = imagedata.width;
-		canvas.height = imagedata.height;
-		ctx.putImageData (imagedata, 0, 0);
-		var dataURL = canvas.toDataURL ();
-		var img = new Image ();
-		img.src = dataURL;
-		return img;
-	}
-
-	function image_to_imagedata(image) {
-		const canvas = document.createElement('canvas');
-		canvas.width = image.naturalWidth;
-		canvas.height = image.naturalHeight;
-		const ctx = canvas.getContext('2d');
-		ctx.drawImage(image, 0, 0);
-		return ctx.getImageData(0, 0, canvas.width, canvas.height);
-	}
 
 	function draw_cropped_image() {
 		if (!shape) {
-			
-			//ctx.temp.drawImage(value_img, 0, 0, width, height); 
-	
-			const x = canvas.temp.getBoundingClientRect();
-			//console.log(`canvas width: ${ctx.temp.canvas.width}, canvas height: ${ctx.temp.canvas.height}`);
-			//console.log(`img width: ${width}, height: ${height}`);
-			
-			if (value_img_data_original == null) {
-				console.log('value_img_data_original is null');
-				value_img_data_original = image_to_imagedata(value_img);
-				value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
-				value_img_data_opaque.data.set(value_img_data_original.data);
-				var pixels = value_img_data_opaque.data; // get the pixel array
-				for (var i = 0; i < pixels.length; i += 4) { 
-					if (pixels[i+3] != 255) {
-						pixels[i+3] = 255; 
-					}
-				}
-				value_img_opaque = imagedata_to_image(value_img_data_opaque);
-			}
-			ctx.temp.drawImage(value_img_opaque, 0, 0, width, height)
-			if (changed_objects.length > 0) {
-				for (let i = 0; i < changed_objects.length; i++) {
-					const { img, pos } = changed_objects[i];
-					//console.log(pos, img);
-					ctx.temp.drawImage(img, pos.left, pos.top);
-				}
-			}
+			ctx.temp.drawImage(value_img, 0, 0, width, height);
 			return;
 		}
 
-		console.log('shape:')
-		console.log(shape)
 		let _width = value_img.naturalWidth;
 		let _height = value_img.naturalHeight;
 
@@ -219,7 +159,7 @@
 				}
 				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
 
-				trigger_on_change('onMount line 219');
+				trigger_on_change();
 			});
 
 			setTimeout(() => {
@@ -236,7 +176,7 @@
 				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
 
 				draw_lines({ lines: lines.slice() });
-				trigger_on_change('onMount line 236');
+				trigger_on_change();
 			}, 100);
 		}
 
@@ -314,14 +254,14 @@
 		const _lines = [];
 
 		redraw_image(_lines);
-		trigger_on_change('clear_mask');
+		trigger_on_change();
 	}
 
 	export function undo() {
 		const _lines = lines.slice(0, -1);
 
 		redraw_image(_lines);
-		trigger_on_change('undo');
+		trigger_on_change();
 	}
 
 	let get_save_data = () => {
@@ -373,9 +313,6 @@
 	let handle_draw_move = (e) => {
 		e.preventDefault();
 		const { x, y } = get_pointer_pos(e);
-
-		clear_canvas()
-
 		handle_pointer_move(x, y);
 	};
 
@@ -389,198 +326,6 @@
 		if (mode === "mask") {
 			save_mask_line();
 		}
-	};
-
-	// Create the path
-	var drag_start_x = null;
-	var drag_start_y = null;
-	var cropRect = {
-	top: 0,
-	left: 0,
-	width: 0,
-	height: 0
-	};
-
-	let find_bounding_box = (selected_obj_id) => {
-		let min_x = value_img_data_original.width;
-		let min_y = value_img_data_original.height;
-		let max_x = 0;
-		let max_y = 0;
-
-		for (let y = 0; y < value_img_data_original.height; y++) {
-			for (let x = 0; x < value_img_data_original.width; x++) {
-				const index = (y * value_img_data_original.width + x) * 4;
-				const pixels = value_img_data_original.data;
-				const pixel_value = pixels[index + 3];
-
-				if (pixel_value === selected_obj_id) {
-					min_x = Math.min(min_x, x);
-					min_y = Math.min(min_y, y);
-					max_x = Math.max(max_x, x);
-					max_y = Math.max(max_y, y);
-				}
-			}
-		}
-
-		return {
-			top: min_y,
-			left: min_x,
-			width: max_x - min_x,
-			height: max_y - min_y,
-		};
-	};
-
-	var changed_objects = [];
-	var cropped_image;
-	var current_object_id = 0;
-
-	function create_cropped_image(src_img, rect) {
-		const canvas = document.createElement('canvas');
-		canvas.width = rect.width;
-		canvas.height = rect.height;
-		const ctx = canvas.getContext('2d');
-		ctx.drawImage(src_img, cropRect.left, rect.top, rect.width, rect.height, 0, 0, rect.width, rect.height);
-		var dst_img = new Image();
-		dst_img.src = canvas.toDataURL();
-		return dst_img;
-	}
-
-	function construct_current_object(current_object_id)
-	{
-		let ids = changed_objects.map(obj => obj.id);
-		console.log("changed obj ids =", ids);
-		if (ids.includes(current_object_id)) {
-		  	console.log("current_object_id is a chaged object");
-			let current_obj = changed_objects.find(obj => obj.id === current_object_id);
-			console.log("current_obj =", current_obj);			
-			cropRect = current_obj.pos;
-			cropped_image = current_obj.img;
-			//console.log("cropped_image =", cropped_image);
-			//console.log("cropRect =", cropRect);
-		}
-		else {
-			cropRect = find_bounding_box(current_object_id);
-			cropped_image = create_cropped_image(value_img_opaque, cropRect);
-		}
-	}
-
-	function identify_object_id(x, y) {
-		const index = (Math.round(y) * value_img_data_original.width + Math.round(x)) * 4;
-		const pixels = value_img_data_original.data; 
-		console.log(`imageDataOriginal width and height: ${value_img_data_original.width}, ${value_img_data_original.height}`)
-		console.log(`pixels length: ${pixels.length}`)
-		console.log(`image space x and y: ${x}, ${y}`); 
-		console.log(`pixel index: ${index}`);
-		console.log(`pixel value: ${pixels[index]}, ${pixels[index+1]}, ${pixels[index+2]}, ${pixels[index+3]}`);
-		var id_selected = pixels[index+3];
-		if (changed_objects.length > 0) {
-			for (let i = changed_objects.length - 1; i >= 0 ; i--) {
-				const { id, pos } = changed_objects[i];
-				console.log(id, pos);
-				if (x >= pos.left && x < pos.left + pos.width && y >= pos.top && y < pos.top + pos.height)
-				{
-					id_selected = id;
-					break;
-				}
-			}
-		}
-		return id_selected;
-	}
-
-	let handle_drag_start = (e) => {
-		e.preventDefault();
-		is_pressing = true;
-		const { x, y } = get_pointer_pos(e);
-
-		drag_start_x = x;
-		drag_start_y = y;
-
-		current_object_id = identify_object_id(x, y);
-		if (current_object_id == 0) {
-			console.log("no object is selected");
-			is_pressing = false
-			return;
-		}
-		console.log("handle_drag_start: changed_objects", changed_objects)
-		construct_current_object(current_object_id);		
-	};
-
-	let handle_drag_move = (e) => {
-		e.preventDefault();
-		if (!is_pressing) {
-			return;
-		}
-
-		clear_canvas();
-		ctx.drawing.clearRect(0, 0, width, height);
-		draw_cropped_image();
-	
-		const { x, y } = get_pointer_pos(e);
-		const drag_move_x = x - drag_start_x;
-		const drag_move_y = y - drag_start_y;
-		const draw_x = cropRect.left + drag_move_x;
-		const draw_y = cropRect.top + drag_move_y;
-		ctx.drawing.drawImage(cropped_image, draw_x, draw_y);
-	};
-
-	let erase_object = (obj_id) => {
-		let min_x = value_img_data_opaque.width;
-		let min_y = value_img_data_opaque.height;
-		let max_x = 0;
-		let max_y = 0;
-
-		let ids = changed_objects.map(obj => obj.id);
-		console.log("erase_object: changed obj ids =", ids);
-		if (ids.includes(current_object_id)) {
-			let index = changed_objects.findLastIndex(obj => obj.id === obj_id);
-			for (let i = index - 1; i >= 0; i--) {
-				if (changed_objects[i].id === obj_id) {
-					changed_objects.splice(i, 1);
-				} 
-			}
-		}
-
-		//improve: not be necessary for objects that have been erased before
-		for (let y = 0; y < value_img_data_opaque.height; y++) {
-			for (let x = 0; x < value_img_data_opaque.width; x++) {
-				const index = (y * value_img_data_opaque.width + x) * 4;
-				const pixels_original = value_img_data_original.data;
-				var pixels = value_img_data_opaque.data;
-				if (pixels_original[index + 3] == obj_id) {
-					pixels[index] = 0;
-					pixels[index + 1] = 0;
-					pixels[index + 2] = 0;										
-					pixels[index + 3] = 0;
-				}
-			}
-		}
-		value_img_opaque = imagedata_to_image (value_img_data_opaque);
-		value_img_opaque.addEventListener('load', () => {
-			clear_canvas();
-			console.log('erase_object: value_img_opaque loaded');
-			draw_cropped_image();
-		});
-
-		return;
-	};
-
-	let handle_drag_end = (e) => {
-		e.preventDefault();
-		if (!is_pressing) {
-			return;
-		}
-		is_pressing = false;
-		mouse_has_moved = true;
-		const { x, y } = get_pointer_pos(e);
-		const drag_move_x = Math.round(x - drag_start_x);
-		const drag_move_y = Math.round(y - drag_start_y);
-		const draw_x = cropRect.left + drag_move_x;
-		const draw_y = cropRect.top + drag_move_y;		
-		changed_objects.push({id: current_object_id, pos: {left: draw_x, top: draw_y, width: cropRect.width, height: cropRect.height}, img: cropped_image});
-		erase_object(current_object_id);
-
-		dispatch("select", { index: [drag_move_x, drag_move_y], value: current_object_id });
-		console.log("handle_drag_end: dispatch (select)")
 	};
 
 	let old_width = 0;
@@ -686,7 +431,7 @@
 			points.push(lazy.brush.toObject());
 		}
 		if (is_drawing) {
-			points.push(lazy.brush.toObject());			
+			points.push(lazy.brush.toObject());
 			draw_points({
 				points: points,
 				brush_color,
@@ -706,38 +451,25 @@
 
 	let draw_points = ({ points, brush_color, brush_radius }) => {
 		if (!points || points.length < 2) return;
-
-		console.log("draw_points length", points.length)
-
 		ctx.temp.lineJoin = "round";
 		ctx.temp.lineCap = "round";
 
 		ctx.temp.strokeStyle = brush_color;
 		ctx.temp.lineWidth = brush_radius;
 		if (!points || points.length < 2) return;
-
-		console.log("draw_points length", points.length)
 		let p1 = points[0];
 		let p2 = points[1];
 		ctx.temp.moveTo(p2.x, p2.y);
 		ctx.temp.beginPath();
-
 		for (var i = 1, len = points.length; i < len; i++) {
 			var midPoint = mid_point(p1, p2);
 			ctx.temp.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
 			p1 = points[i];
 			p2 = points[i + 1];
 		}
-		/*
-		ctx.temp.lineTo(p1.x, p1.y);
 
+		ctx.temp.lineTo(p1.x, p1.y);
 		ctx.temp.stroke();
-		*/
-		//draw a rectangle instead
-		ctx.temp.strokeStyle = 'red';
-		ctx.temp.lineWidth = 5;
-		ctx.temp.strokeRect(p1.x, p1.y, 50, 50);
-		console.log('drawing rect at ', p1.x, p1.y);
 	};
 
 	let draw_fake_points = ({ points, brush_color, brush_radius }) => {
@@ -751,23 +483,15 @@
 		let p2 = points[1];
 		ctx.temp_fake.moveTo(p2.x, p2.y);
 		ctx.temp_fake.beginPath();
-
-		
 		for (var i = 1, len = points.length; i < len; i++) {
 			var midPoint = mid_point(p1, p2);
 			ctx.temp_fake.quadraticCurveTo(p1.x, p1.y, midPoint.x, midPoint.y);
 			p1 = points[i];
 			p2 = points[i + 1];
 		}
-		/*
+
 		ctx.temp_fake.lineTo(p1.x, p1.y);
 		ctx.temp_fake.stroke();
-		*/
-		//draw a rectangle instead
-		ctx.temp_fake.strokeStyle = 'red';
-		ctx.temp_fake.lineWidth = 5;
-		ctx.temp_fake.strokeRect(p1.x, p1.y, 50, 50);
-		console.log('drawing rect at ', p1.x, p1.y);		
 	};
 
 	let save_mask_line = () => {
@@ -775,7 +499,7 @@
 		points.length = 0;
 		ctx.mask.drawImage(canvas.temp_fake, 0, 0, width, height);
 
-		trigger_on_change('save_mask_line');
+		trigger_on_change();
 	};
 
 	let saveLine = () => {
@@ -793,11 +517,10 @@
 
 		ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
 
-		trigger_on_change('saveLine');
+		trigger_on_change();
 	};
 
-	let trigger_on_change = (source) => {
-		console.log(`trigger_on_change called from ${source}`);
+	let trigger_on_change = () => {
 		const x = get_image_data();
 		dispatch("change", x);
 	};
@@ -834,7 +557,7 @@
 		if (mouse_has_moved || values_changed) {
 			const pointer = lazy.getPointerCoordinates();
 			const brush = lazy.getBrushCoordinates();
-//			draw_interface(ctx.interface, pointer, brush);
+			draw_interface(ctx.interface, pointer, brush);
 			mouse_has_moved = false;
 			values_changed = false;
 		}
@@ -851,7 +574,6 @@
 		ctx.clearRect(0, 0, width, height);
 
 		// brush preview
-		/*
 		ctx.beginPath();
 		ctx.fillStyle = brush_color;
 		ctx.arc(brush.x, brush.y, brush_radius / 2, 0, Math.PI * 2, true);
@@ -862,7 +584,6 @@
 		ctx.fillStyle = catenary_color;
 		ctx.arc(brush.x, brush.y, brush_dot, 0, Math.PI * 2, true);
 		ctx.fill();
-		*/
 	};
 
 	export function get_image_data() {
@@ -890,21 +611,9 @@
 			class:lr={add_lr_border}
 			class:tb={!add_lr_border}
 			bind:this={canvas[name]}
-			on:mousedown={
-				name === "interface" ? handle_draw_start : 
-				name === "drawing" ? handle_drag_start : 
-				undefined
-			}
-			on:mousemove={
-				name === "interface" ? handle_draw_move : 
-				name === "drawing" ? handle_drag_move : 
-				undefined
-			}
-			on:mouseup={
-				name === "interface" ? handle_draw_end : 
-				name === "drawing" ? handle_drag_end : 
-				undefined
-			}
+			on:mousedown={name === "interface" ? handle_draw_start : undefined}
+			on:mousemove={name === "interface" ? handle_draw_move : undefined}
+			on:mouseup={name === "interface" ? handle_draw_end : undefined}
 			on:mouseout={name === "interface" ? handle_draw_end : undefined}
 			on:blur={name === "interface" ? handle_draw_end : undefined}
 			on:touchstart={name === "interface" ? handle_draw_start : undefined}
@@ -938,7 +647,7 @@
 	}
 
 	canvas:hover {
-		cursor: crosshair;
+		cursor: none;
 	}
 
 	.wrap {

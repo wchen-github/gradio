@@ -304,21 +304,39 @@
 					/>
 				{/key}
 				{#if img_width > 0}
-					<Sketch
-						{value}
-						bind:this={sketch}
-						bind:brush_radius
-						bind:brush_color
-						on:change={handle_save}
-						on:select={handle_select}
-						{mode}
-						width={img_width || max_width}
-						height={img_height || max_height}
-						container_height={container_height || max_height}
-						{value_img}
-						{source}
-						{shape}
-					/>
+					{#if tool === "compose"}
+						<Compose
+							{value}
+							bind:this={compose}
+							bind:brush_radius
+							bind:brush_color
+							on:change={handle_save}
+							on:select={handle_select}
+							{mode}
+							width={img_width || max_width}
+							height={img_height || max_height}
+							container_height={container_height || max_height}
+							{value_img}
+							{source}
+							{shape}
+						/>
+					{:else}
+						<Sketch
+							{value}
+							bind:this={sketch}
+							bind:brush_radius
+							bind:brush_color
+							on:change={handle_save}
+							on:select={handle_select}
+							{mode}
+							width={img_width || max_width}
+							height={img_height || max_height}
+							container_height={container_height || max_height}
+							{value_img}
+							{source}
+							{shape}
+						/>
+					{/if}
 					<ModifySketch
 						show_eraser={value_img}
 						on:undo={() => sketch.undo()}

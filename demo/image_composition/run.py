@@ -13,11 +13,11 @@ with gr.Blocks() as demo:
 #    with gr.Row():
         segmented_img = gr.Image(label="Segmented", tool="compose")
         print("segment image config", segmented_img.get_config())
-        composed_img = gr.Image(label="Composed", type='numpy')
+        composed_img = gr.Image(label="Test Sketch", type='numpy', tool="sketch")
         print("composed image config", composed_img.get_config()) #strangely, these two need to be in the same Row, perhaps due to shared np array 
     with gr.Row():
         segment_btn = gr.Button("Segment image")
-        compose_btn = gr.Button("Compose image")
+        #compose_btn = gr.Button("Compose image")
 
     def move_selection(img, d, evt: gr.SelectData):
         """Returns an image with the selected segment highlighted."""
@@ -125,7 +125,7 @@ with gr.Blocks() as demo:
     segmented_img.select (changed_objects_handler, segmented_img, [])
     
     segment_btn.click(get_segment, input_img, segmented_img)
-    compose_btn.click(get_composed, [], composed_img)
+    #compose_btn.click(get_composed, [], composed_img)
 
 #    input_img.selection_move(get_selection_move_data, input_img, input_img)
 
