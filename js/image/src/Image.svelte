@@ -44,6 +44,10 @@
 	}
 
 	function handle_upload({ detail }: CustomEvent<string>) {
+
+		console.log("handle_upload container_height:", container_height);
+		console.log("handle_upload max_height:", max_height);
+
 		if (tool === "color-sketch") {
 			static_image = detail;
 		} else {
@@ -189,17 +193,26 @@
 		console.log("image.svelte source:", source);
 		console.log("image.svelte tool:", tool);
 		console.log("image.svelte mode:", mode);
+		console.log("image.svelte container_height:", container_height);
+		console.log("image.svelte max_height:", max_height);
 	}
 
 	onMount(async () => {
-		console.log("image.svelte source:", source);
-		console.log("image.svelte tool:", tool);		
+		console.log("image.svelte onMount source:", source);
+		console.log("image.svelte onMount tool:", tool);		
+		console.log("onMount container_height:", container_height);
+		console.log("onMount max_height:", max_height);
 		if (tool === "color-sketch" && value && typeof value === "string") {
 			static_image = value;
 			await tick();
-			handle_image_load({ currentTarget: value_img });
+			({ currentTarget: value_img });
 		} 
 	});
+
+	$: { 	
+		console.log("container_height:", container_height);
+		console.log("max_height:", max_height);
+	}
 
 	const handle_click = (evt: MouseEvent) => {
 		let coordinates = get_coordinates_of_clicked_image(evt);
