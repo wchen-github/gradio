@@ -120,7 +120,7 @@
 		var canvas = document.createElement ('canvas');
 		var ctx = canvas.getContext ('2d');
 		canvas.width = imagedata.width;
-		canvas.height = imagedata.height;
+		canvas.height = imagedata.height;  		
 		ctx.putImageData (imagedata, 0, 0);
 		var dataURL = canvas.toDataURL ();
 		var img = new Image ();
@@ -433,16 +433,52 @@
 	var changed_objects = [];
 	var cropped_image;
 	var current_object_id = 0;
+	var cropping_img_data = null;
+	var cropping_img = null;
 
-	function create_cropped_image(src_img, rect) {
-		const canvas = document.createElement('canvas');
-		canvas.width = rect.width;
-		canvas.height = rect.height;
-		const ctx = canvas.getContext('2d');
-		ctx.drawImage(src_img, cropRect.left, rect.top, rect.width, rect.height, 0, 0, rect.width, rect.height);
-		var dst_img = new Image();
-		dst_img.src = canvas.toDataURL();
-		return dst_img;
+	function create_cropped_image(rect, obj_id) {
+		return new Promise((resolve) => {
+			cropping_img_data = new ImageData(value_img_data_original.width, value_img_data_original.height);
+			cropping_img_data.data.set(value_img_data_original.data);
+			for (let y = 0; y < cropping_img_data.height; y++) {
+				for (let x = 0; x < cropping_img_data.width; x++) {
+					const index = (y * cropping_img_data.width + x) * 4;
+					const pixels_original = value_img_data_original.data;
+					var pixels = cropping_img_data.data;
+					if (pixels_original[index + 3] == obj_id) {
+						pixels[index + 3] = 255;
+					}
+					else {
+						pixels[index + 3] = 0;
+					}
+				}
+			}
+			//console.log("cropping_img_data =", cropping_img_data);
+			cropping_img = imagedata_to_image(cropping_img_data);
+			//console.log("cropping_img =", cropping_img);
+
+			cropping_img.addEventListener("load", () => {
+				const canvas = document.createElement("canvas");
+				canvas.width = rect.width;
+				canvas.height = rect.height;
+				const ctx = canvas.getContext("2d");
+				ctx.drawImage(
+					cropping_img,
+					cropRect.left,
+					rect.top,
+					rect.width,
+					rect.height,
+					0,
+					0,
+					rect.width,
+					rect.height
+				);
+				var dst_img = new Image();
+				dst_img.src = canvas.toDataURL();
+				//console.log("dst_img =", dst_img);
+				resolve(dst_img);
+			});
+		});
 	}
 
 	function construct_current_object(current_object_id)
@@ -460,7 +496,12 @@
 		}
 		else {
 			cropRect = find_bounding_box(current_object_id);
-			cropped_image = create_cropped_image(value_img_opaque, cropRect);
+			async function blocking_function() {
+				cropped_image = await create_cropped_image(cropRect, current_object_id);
+			}
+			blocking_function();
+			//console.log("cropped_image =", cropped_image);
+			//console.log("cropRect =", cropRect);
 		}
 	}
 
@@ -501,8 +542,8 @@
 			is_pressing = false
 			return;
 		}
-		console.log("handle_drag_start: changed_objects", changed_objects)
 		construct_current_object(current_object_id);		
+		console.log("handle_drag_start: changed_objects", changed_objects)
 	};
 
 	let handle_drag_move = (e) => {
