@@ -124,7 +124,7 @@
 		ctx.putImageData (imagedata, 0, 0);
 		var dataURL = canvas.toDataURL ();
 		var img = new Image ();
-		img.src = dataURL;
+		img.src = dataURL;		
 		return img;
 	}
 
@@ -158,15 +158,19 @@
 					}
 				}
 				value_img_opaque = imagedata_to_image(value_img_data_opaque);
+				console.log("value_img_opaque:", value_img_opaque)
 			}
-			ctx.temp.drawImage(value_img_opaque, 0, 0, width, height)
-			if (changed_objects.length > 0) {
-				for (let i = 0; i < changed_objects.length; i++) {
-					const { img, pos } = changed_objects[i];
-					//console.log(pos, img);
-					ctx.temp.drawImage(img, pos.left, pos.top);
+			if (value_img_opaque.complete == true) {
+				ctx.temp.drawImage(value_img_opaque, 0, 0, width, height);
+				if (changed_objects.length > 0) {
+					for (let i = 0; i < changed_objects.length; i++) {
+						const { img, pos } = changed_objects[i];
+						//console.log(pos, img);
+						ctx.temp.drawImage(img, pos.left, pos.top);
+					}
 				}
 			}
+
 			return;
 		}
 
@@ -207,6 +211,9 @@
 		await tick();
 
 		if (value_img) {
+			
+			console.log("Compose.svelte:onMount: value_img.complete:", value_img.complete)
+
 			value_img.addEventListener("load", (_) => {
 				if (source === "webcam") {
 					ctx.temp.save();
@@ -217,6 +224,7 @@
 				} else {
 					draw_cropped_image();
 				}
+				console.log('onMount: load value_img:', value_img)
 				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
 
 				trigger_on_change('onMount line 219');
