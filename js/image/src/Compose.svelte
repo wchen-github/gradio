@@ -439,7 +439,7 @@
 	};
 
 	var changed_objects = [];
-	var cropped_image;
+	var cropped_image = null;
 	var current_object_id = 0;
 	var cropping_img_data = null;
 	var cropping_img = null;
@@ -569,7 +569,9 @@
 		const drag_move_y = y - drag_start_y;
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;
-		ctx.drawing.drawImage(cropped_image, draw_x, draw_y);
+		if (cropped_image && cropped_image.complete) {
+			ctx.drawing.drawImage(cropped_image, draw_x, draw_y);
+		}
 	};
 
 	let erase_object = (obj_id) => {
