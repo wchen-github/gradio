@@ -850,9 +850,9 @@
 	};
 
 	let trigger_on_change = (source) => {
-		//console.log(`trigger_on_change called from ${source}`);
-		//const x = get_image_data();
-		//dispatch("change", x);
+		console.log(`trigger_on_change called from ${source}`);
+		const x = get_image_data();
+		dispatch("change", x);
 	};
 
 	export function clear() {
