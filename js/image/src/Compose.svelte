@@ -43,33 +43,6 @@
 
 	$: mounted && !value && clear();
 
-	let last_value_img;
-
-	$: {
-		if (mounted && value_img !== last_value_img) {
-			last_value_img = value_img;
-
-			clear();
-
-			setTimeout(() => {
-				if (source === "webcam") {
-					ctx.temp.save();
-					ctx.temp.translate(width, 0);
-					ctx.temp.scale(-1, 1);
-					ctx.temp.drawImage(value_img, 0, 0);
-					ctx.temp.restore();
-				} else {
-					draw_cropped_image();
-				}
-
-				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
-
-				draw_lines({ lines: lines.slice() });
-				trigger_on_change('line 66');
-			}, 50);
-		}
-	}
-
 	function mid_point(p1, p2) {
 		return {
 			x: p1.x + (p2.x - p1.x) / 2,
@@ -115,7 +88,14 @@
 	let value_img_data_original = null;
 	let value_img_data_opaque = null;
 	let value_img_opaque = null;
-	
+
+	let changed_objects = [];
+	let cropped_image = null;
+	let current_object_id = 0;
+	let cropping_img_data = null;
+	let cropping_img = null;
+
+	//user must wait for image to load before drawing
 	function imagedata_to_image (imagedata) {
 		var canvas = document.createElement ('canvas');
 		var ctx = canvas.getContext ('2d');
@@ -137,30 +117,20 @@
 		return ctx.getImageData(0, 0, canvas.width, canvas.height);
 	}
 
+	$: {
+		console.log("Compose.svelte: value changed = ", value);
+		console.log("Compose.svelte: value_img.complete:", value_img.complete)
+	}
+
 	function draw_cropped_image() {
 		if (!shape) {
-			
-			//ctx.temp.drawImage(value_img, 0, 0, width, height); 
+
+			console.log('draw_cropped_image: ', value_img);
 	
 			const x = canvas.temp.getBoundingClientRect();
 			//console.log(`canvas width: ${ctx.temp.canvas.width}, canvas height: ${ctx.temp.canvas.height}`);
 			//console.log(`img width: ${width}, height: ${height}`);
-			
-			if (value_img_data_original == null) {
-				console.log('value_img_data_original is null');
-				value_img_data_original = image_to_imagedata(value_img);
-				value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
-				value_img_data_opaque.data.set(value_img_data_original.data);
-				var pixels = value_img_data_opaque.data; // get the pixel array
-				for (var i = 0; i < pixels.length; i += 4) { 
-					if (pixels[i+3] != 255) {
-						pixels[i+3] = 255; 
-					}
-				}
-				value_img_opaque = imagedata_to_image(value_img_data_opaque);
-				console.log("value_img_opaque:", value_img_opaque)
-			}
-			if (value_img_opaque.complete == true) {
+			if (value_img_opaque != null && value_img_opaque.complete == true) {
 				ctx.temp.drawImage(value_img_opaque, 0, 0, width, height);
 				if (changed_objects.length > 0) {
 					for (let i = 0; i < changed_objects.length; i++) {
@@ -211,42 +181,80 @@
 		await tick();
 
 		if (value_img) {
-			
+			//This block repeats the code in the loaded event listener block below, but it is necessary to ensure that the image is drawn
+			//This is because for the first time, the value_img is already loaded by the time the event listener is added
 			console.log("Compose.svelte:onMount: value_img.complete:", value_img.complete)
+			console.log('Compose.svelte:onMount: value_img:', value_img)			
 
-			value_img.addEventListener("load", (_) => {
-				if (source === "webcam") {
-					ctx.temp.save();
-					ctx.temp.translate(width, 0);
-					ctx.temp.scale(-1, 1);
-					ctx.temp.drawImage(value_img, 0, 0);
-					ctx.temp.restore();
-				} else {
-					draw_cropped_image();
+			changed_objects = [];
+			cropped_image = null;
+			current_object_id = 0;
+			cropping_img_data = null;
+			cropping_img = null;
+
+			value_img_data_original = image_to_imagedata(value_img);
+			value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
+			value_img_data_opaque.data.set(value_img_data_original.data);
+			var pixels = value_img_data_opaque.data; // get the pixel array
+			for (var i = 0; i < pixels.length; i += 4) { 
+				if (pixels[i+3] != 255) {
+					pixels[i+3] = 255; 
 				}
-				console.log('onMount: load value_img:', value_img)
-				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
-
-				trigger_on_change('onMount line 219');
-			});
-
-			setTimeout(() => {
-				if (source === "webcam") {
-					ctx.temp.save();
-					ctx.temp.translate(width, 0);
-					ctx.temp.scale(-1, 1);
-					ctx.temp.drawImage(value_img, 0, 0);
-					ctx.temp.restore();
-				} else {
-					draw_cropped_image();
-				}
-
-				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
-
-				draw_lines({ lines: lines.slice() });
-				trigger_on_change('onMount line 236');
-			}, 100);
+			}
+			value_img_opaque = imagedata_to_image(value_img_data_opaque);
+			value_img_opaque.onload = (_) => {
+				console.log('value_img_opaque loaded');
+				console.log("value_img_opaque:", value_img_opaque);
+				draw_cropped_image();
+				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);			
+			};
 		}
+
+		value_img.addEventListener("load", (_) => {
+			console.log('Compose.svelte:value_img loaded');
+
+			changed_objects = [];
+			cropped_image = null;
+			current_object_id = 0;
+			cropping_img_data = null;
+			cropping_img = null;
+
+			value_img_data_original = image_to_imagedata(value_img);
+			value_img_data_opaque = new ImageData(value_img_data_original.width, value_img_data_original.height);
+			value_img_data_opaque.data.set(value_img_data_original.data);
+			var pixels = value_img_data_opaque.data; // get the pixel array
+			for (var i = 0; i < pixels.length; i += 4) { 
+				if (pixels[i+3] != 255) {
+					pixels[i+3] = 255; 
+				}
+			}
+			value_img_opaque = imagedata_to_image(value_img_data_opaque);
+			console.log("value_img_opaque.complete:", value_img_opaque.complete);
+			value_img_opaque.onload = (_) => {
+				console.log('value_img_opaque loaded');
+				console.log("value_img_opaque:", value_img_opaque);
+				draw_cropped_image();
+				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);			
+			};
+		});
+
+		setTimeout(() => {
+			if (source === "webcam") {
+				ctx.temp.save();
+				ctx.temp.translate(width, 0);
+				ctx.temp.scale(-1, 1);
+				ctx.temp.drawImage(value_img, 0, 0);
+				ctx.temp.restore();
+			} else {
+				console.log('setTimeout: draw_cropped_image')
+				draw_cropped_image();
+			}
+
+			ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);
+
+			draw_lines({ lines: lines.slice() });
+			trigger_on_change('onMount line 236');
+		}, 100);
 
 		lazy = new LazyBrush({
 			radius: brush_radius * 0.05,
@@ -437,12 +445,6 @@
 			height: max_y - min_y,
 		};
 	};
-
-	var changed_objects = [];
-	var cropped_image = null;
-	var current_object_id = 0;
-	var cropping_img_data = null;
-	var cropping_img = null;
 
 	function create_cropped_image(rect, obj_id) {
 		return new Promise((resolve) => {
@@ -848,9 +850,9 @@
 	};
 
 	let trigger_on_change = (source) => {
-		console.log(`trigger_on_change called from ${source}`);
-		const x = get_image_data();
-		dispatch("change", x);
+		//console.log(`trigger_on_change called from ${source}`);
+		//const x = get_image_data();
+		//dispatch("change", x);
 	};
 
 	export function clear() {
