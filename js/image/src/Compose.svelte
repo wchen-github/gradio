@@ -208,6 +208,7 @@
 				draw_cropped_image();
 				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);			
 			};
+			trigger_on_change('onMount line 211');
 		}
 
 		value_img.addEventListener("load", (_) => {
