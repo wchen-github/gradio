@@ -125,7 +125,7 @@
 	function draw_cropped_image() {
 		if (!shape) {
 
-			console.log('draw_cropped_image: ', value_img);
+			//console.log('draw_cropped_image: ', value_img);
 	
 			const x = canvas.temp.getBoundingClientRect();
 			//console.log(`canvas width: ${ctx.temp.canvas.width}, canvas height: ${ctx.temp.canvas.height}`);
@@ -208,6 +208,8 @@
 				draw_cropped_image();
 				ctx.drawing.drawImage(canvas.temp, 0, 0, width, height);			
 			};
+			//This trigger on change somehow doesn't send the mask back. Deal with it in components.py. TBD: do we really need
+			//to call this here? Or do we need mask at all for Compose?
 			trigger_on_change('onMount line 211');
 		}
 

@@ -1961,9 +1961,11 @@ class Image(
             return x
 
         mask = ""
-        if (self.tool == "sketch" or self.tool == "compose") and self.source in ["upload", "webcam"]:
-            assert isinstance(x, dict)
-            x, mask = x["image"], x["mask"]
+        #there are times the compose tool sends a str back instead of a dict. Guard against that.
+        if (isinstance(x, dict)) :
+            if (self.tool == "sketch" or self.tool == "compose") and self.source in ["upload", "webcam"]:
+                assert isinstance(x, dict)
+                x, mask = x["image"], x["mask"]
 
         assert isinstance(x, str)
         im = processing_utils.decode_base64_to_image(x)
@@ -1981,7 +1983,7 @@ class Image(
         ):
             im = PIL.ImageOps.mirror(im)
 
-        if (self.tool == "sketch" or self.tool == "compose") and self.source in ["upload", "webcam"]:
+        if (self.tool == "sketch") and self.source in ["upload", "webcam"]:
             mask_im = processing_utils.decode_base64_to_image(mask)
             return {
                 "image": self._format_image(im),
