@@ -241,6 +241,24 @@
 			};
 		});
 
+		// If the mouse is dragging an object but released outside, object is deleted from scene
+		document.onmouseup = (_) => {
+			if (is_pressing) 
+			{
+				console.log("handle drag ended outside element"); 	//remove this object
+				is_pressing = false;
+				mouse_has_moved = true;
+
+				//clear_canvas();
+				//ctx.drawing.clearRect(0, 0, width, height);
+				//draw_cropped_image();
+				erase_object(current_object_id);
+
+				dispatch("select", { index: [10000, 10000], value: current_object_id });
+				console.log("handle_drag_end (to outside): dispatch (select)")
+			}
+		}
+
 		setTimeout(() => {
 			if (source === "webcam") {
 				ctx.temp.save();
@@ -613,6 +631,7 @@
 		value_img_opaque = imagedata_to_image (value_img_data_opaque);
 		value_img_opaque.addEventListener('load', () => {
 			clear_canvas();
+			ctx.drawing.clearRect(0, 0, width, height);			
 			console.log('erase_object: value_img_opaque loaded');
 			draw_cropped_image();
 		});
@@ -621,6 +640,7 @@
 	};
 
 	let handle_drag_end = (e) => {
+		e.stopPropagation();		//so that document:onmouseup won't fire again
 		e.preventDefault();
 		if (!is_pressing) {
 			return;
@@ -961,7 +981,6 @@
 				name === "drawing" ? handle_drag_end : 
 				undefined
 			}
-			on:mouseout={name === "interface" ? handle_draw_end : undefined}
 			on:blur={name === "interface" ? handle_draw_end : undefined}
 			on:touchstart={name === "interface" ? handle_draw_start : undefined}
 			on:touchmove={name === "interface" ? handle_draw_move : undefined}
