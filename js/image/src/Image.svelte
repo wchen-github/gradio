@@ -364,6 +364,7 @@
 							img_width={img_width || max_width}
 							img_height={img_height || max_height}
 							{mode}
+							{tool}
 						/>
 					{/if}
 				{/if}

@@ -14,40 +14,43 @@
 	export let img_width: number;
 	export let img_height: number;
 	export let mode: "mask" | "other" = "other";
+	export let tool: "compose" | "others" = "others";
 
 	$: width = container_height * (img_width / img_height);
 </script>
 
 <div class="wrap">
-	<span class="brush">
-		<IconButton
-			Icon={Brush}
-			label="Use brush"
-			on:click={() => (show_size = !show_size)}
-		/>
-		{#if show_size}
-			<input
-				aria-label="Brush radius"
-				bind:value={brush_radius}
-				type="range"
-				min={0.5 * (img_width / width)}
-				max={75 * (img_width / width)}
-			/>
-		{/if}
-	</span>
-
-	{#if mode !== "mask"}
-		<span class="col">
+	{#if tool !== "compose"}
+		<span class="brush">
 			<IconButton
-				Icon={Color}
-				label="Select brush color"
-				on:click={() => (show_col = !show_col)}
+				Icon={Brush}
+				label="Use brush"
+				on:click={() => (show_size = !show_size)}
 			/>
-			{#if show_col}
-				<input aria-label="Brush color" bind:value={brush_color} type="color" />
+			{#if show_size}
+				<input
+					aria-label="Brush radius"
+					bind:value={brush_radius}
+					type="range"
+					min={0.5 * (img_width / width)}
+					max={75 * (img_width / width)}
+				/>
 			{/if}
 		</span>
-	{/if}
+
+		{#if mode !== "mask"}
+			<span class="col">
+				<IconButton
+					Icon={Color}
+					label="Select brush color"
+					on:click={() => (show_col = !show_col)}
+				/>
+				{#if show_col}
+					<input aria-label="Brush color" bind:value={brush_color} type="color" />
+				{/if}
+			</span>			
+		{/if}
+	{/if}		
 </div>
 
 <style>
