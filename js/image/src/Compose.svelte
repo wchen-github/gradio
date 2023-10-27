@@ -607,7 +607,7 @@
 		console.log("erase_object: changed obj ids =", ids);
 		if (ids.includes(current_object_id)) {
 			let index = changed_objects.findLastIndex(obj => obj.id === obj_id);
-			for (let i = index - 1; i >= 0; i--) {
+			for (let i = index; i >= 0; i--) {
 				if (changed_objects[i].id === obj_id) {
 					changed_objects.splice(i, 1);
 				} 
@@ -652,8 +652,8 @@
 		const drag_move_y = Math.round(y - drag_start_y);
 		const draw_x = cropRect.left + drag_move_x;
 		const draw_y = cropRect.top + drag_move_y;		
+		erase_object(current_object_id);		
 		changed_objects.push({id: current_object_id, pos: {left: draw_x, top: draw_y, width: cropRect.width, height: cropRect.height}, img: cropped_image});
-		erase_object(current_object_id);
 
 		dispatch("select", { index: [drag_move_x, drag_move_y], value: current_object_id });
 		console.log("handle_drag_end: dispatch (select)")
