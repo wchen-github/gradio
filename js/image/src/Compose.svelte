@@ -604,15 +604,18 @@
 		let max_y = 0;
 
 		let ids = changed_objects.map(obj => obj.id);
-		console.log("erase_object: changed obj ids =", ids);
+		console.log("erase_object: before, changed obj ids =", ids);
 		if (ids.includes(current_object_id)) {
 			let index = changed_objects.findLastIndex(obj => obj.id === obj_id);
+			console.log("erase_object: findLastIndex, index =", index);
 			for (let i = index; i >= 0; i--) {
 				if (changed_objects[i].id === obj_id) {
 					changed_objects.splice(i, 1);
+					console.log("erase_object: splice, i =", i);
 				} 
 			}
 		}
+		console.log("erase_object: after, changed obj ids =", ids);		
 
 		//improve: not be necessary for objects that have been erased before
 		for (let y = 0; y < value_img_data_opaque.height; y++) {
